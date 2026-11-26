@@ -72,7 +72,7 @@ export default async function Historias({ searchParams }: { searchParams: Promis
       ) : (
         [...porDia.entries()].map(([dia, lista]) => (
           <section key={dia} className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium capitalize">
+            <h2 className="text-sm font-medium">
               {diaLargo(dia)} <span className="text-xs font-normal text-tenue">· {lista.length} {lista.length === 1 ? "cuenta" : "cuentas"}</span>
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">

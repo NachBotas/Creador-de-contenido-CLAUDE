@@ -18,7 +18,7 @@ export default async function Secuencia({ params }: { params: Promise<{ referent
         ← Volver a historias
       </Link>
       <h1 className="text-xl font-semibold tracking-tight">
-        @{r.ig_username} <span className="font-normal capitalize text-suave">· {diaLargo(dia)}</span>
+        @{r.ig_username} <span className="font-normal text-suave">· {diaLargo(dia)}</span>
         <span className="ml-2 text-sm font-normal text-tenue">
           {historias.length} {historias.length === 1 ? "historia" : "historias"}
         </span>

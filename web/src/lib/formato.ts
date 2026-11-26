@@ -28,7 +28,8 @@ export function diaClave(iso: string): string {
 }
 
 export function diaLargo(clave: string): string {
-  return new Date(`${clave}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  const t = new Date(`${clave}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 export function multiplicador(x: number | null): string {
