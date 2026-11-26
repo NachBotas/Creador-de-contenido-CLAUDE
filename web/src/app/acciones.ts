@@ -127,3 +127,58 @@ export async function quitarIdea(publicacionId: string) {
   await db().from("ideas").delete().eq("publicacion_id", publicacionId);
   revalidatePath("/", "layout");
 }
+
+// ---------- Métricas (cuentas propias y de clientes) ----------
+
+export async function crearLinkInvitacion(): Promise<string> {
+  await exigirSesion();
+  const { crearInvitacion } = await import("@/lib/auth");
+  const { urlPublica } = await import("@/lib/apify");
+  return `${urlPublica() ?? ""}/conectar?inv=${encodeURIComponent(await crearInvitacion(7))}`;
+}
+
+export async function actualizarCuenta(form: FormData) {
+  await exigirSesion();
+  const id = String(form.get("id") ?? "");
+  const { sincronizarCuenta } = await import("@/lib/instagram");
+  try {
+    await sincronizarCuenta(id);
+  } catch (e) {
+    volver(`/metricas/${id}`, (e as Error).message, true);
+  }
+  revalidatePath("/metricas", "layout");
+  volver(`/metricas/${id}`, "Datos actualizados.");
+}
+
+export async function desconectarCuenta(id: string) {
+  await exigirSesion();
+  await db().from("cuentas_ig").delete().eq("id", id);
+  revalidatePath("/metricas", "layout");
+  redirect("/metricas");
+}
+
+export async function conectarManychatAccion(form: FormData) {
+  await exigirSesion();
+  const cuenta = String(form.get("cuenta") ?? "");
+  const token = String(form.get("token") ?? "").trim();
+  const ruta = `/metricas/${cuenta}?tab=conversaciones`;
+  if (token.length < 10) redirect(`${ruta}&error=${encodeURIComponent("Pegá el token completo de ManyChat.")}`);
+  const { conectarManychat } = await import("@/lib/manychat");
+  let nombre = "";
+  try {
+    nombre = await conectarManychat(token, cuenta || null);
+  } catch (e) {
+    redirect(`${ruta}&error=${encodeURIComponent((e as Error).message)}`);
+  }
+  revalidatePath("/metricas", "layout");
+  redirect(`${ruta}&msg=${encodeURIComponent(`ManyChat conectado: ${nombre}. Verificá que sea la cuenta correcta.`)}`);
+}
+
+export async function desconectarManychat(form: FormData) {
+  await exigirSesion();
+  const id = String(form.get("id") ?? "");
+  const cuenta = String(form.get("cuenta") ?? "");
+  await db().from("manychat_conexiones").delete().eq("id", id);
+  revalidatePath("/metricas", "layout");
+  redirect(`/metricas/${cuenta}?tab=conversaciones`);
+}

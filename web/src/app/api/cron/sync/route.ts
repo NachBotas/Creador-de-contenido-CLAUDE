@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { iniciarSincronizacion } from "@/lib/apify";
+import { instagramConfigurado, sincronizarTodasLasCuentas } from "@/lib/instagram";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 // Vercel llama a esta ruta una vez por día (ver vercel.json) con el CRON_SECRET.
 export async function GET(req: Request) {
@@ -9,9 +11,12 @@ export async function GET(req: Request) {
   if (!secreto || req.headers.get("authorization") !== `Bearer ${secreto}`) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const resultado: Record<string, unknown> = {};
   try {
-    return NextResponse.json({ ok: true, mensaje: await iniciarSincronizacion() });
+    resultado.referentes = await iniciarSincronizacion();
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
+    resultado.errorReferentes = (e as Error).message;
   }
+  if (instagramConfigurado()) resultado.cuentasActualizadas = await sincronizarTodasLasCuentas();
+  return NextResponse.json({ ok: !resultado.errorReferentes, ...resultado });
 }

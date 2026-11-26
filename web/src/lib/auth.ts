@@ -6,7 +6,7 @@ const DURACION_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
 
 const encoder = new TextEncoder();
 
-async function firmar(valor: string): Promise<string> {
+export async function firmar(valor: string): Promise<string> {
   const secreto = process.env.SESSION_SECRET;
   if (!secreto || secreto.length < 16) throw new Error("Falta SESSION_SECRET (mínimo 16 caracteres)");
   const clave = await crypto.subtle.importKey(
@@ -48,4 +48,21 @@ export async function contrasenaCorrecta(intento: string): Promise<boolean> {
   if (!real) return false;
   // Comparamos las firmas para que el tiempo no dependa del contenido.
   return igualSeguro(await firmar(`pw:${intento}`), await firmar(`pw:${real}`));
+}
+
+// Links de invitación para que un cliente conecte su Instagram sin tener la contraseña de la web.
+export async function crearInvitacion(dias = 7): Promise<string> {
+  const vence = Date.now() + dias * 86_400_000;
+  return `${vence}.${(await firmar(`inv:${vence}`)).slice(0, 32)}`;
+}
+
+export async function invitacionValida(token: string | null | undefined): Promise<boolean> {
+  if (!token) return false;
+  const [vence, firma] = token.split(".");
+  if (!vence || !firma || Number(vence) < Date.now()) return false;
+  try {
+    return igualSeguro(firma, (await firmar(`inv:${vence}`)).slice(0, 32));
+  } catch {
+    return false;
+  }
 }

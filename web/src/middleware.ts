@@ -9,7 +9,7 @@ export async function middleware(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-// Todo protegido menos el login, el cron, el webhook de Apify y los archivos estáticos.
+// Todo protegido menos el login, la invitación de clientes, los webhooks (cada uno valida su secreto) y los archivos estáticos.
 export const config = {
-  matcher: ["/((?!login|api/cron|api/apify|_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  matcher: ["/((?!login|conectar|api/cron|api/apify|api/instagram|api/manychat|_next/static|_next/image|favicon.ico|icon.svg).*)"],
 };

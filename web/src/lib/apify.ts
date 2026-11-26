@@ -79,7 +79,7 @@ export async function itemsDelDataset(datasetId: string): Promise<Record<string,
 
 // ---------- Guardado de imágenes en Supabase Storage (las URLs de Instagram vencen) ----------
 
-async function copiarImagen(url: string | undefined | null, ruta: string): Promise<string | null> {
+export async function copiarImagen(url: string | undefined | null, ruta: string): Promise<string | null> {
   if (!url) return null;
   try {
     const res = await fetch(url, { cache: "no-store" });
