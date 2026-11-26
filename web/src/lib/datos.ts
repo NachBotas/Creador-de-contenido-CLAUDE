@@ -9,6 +9,7 @@ export type Filtros = {
   referente: string;
   orden: string;
   min: number; // outlier mínimo
+  minCom: number; // comentarios mínimos
   dias: number; // 0 = siempre
   ganadores: boolean;
   cta: boolean; // solo los que piden comentar una palabra
@@ -22,12 +23,14 @@ const uno = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) 
 export function leerFiltros(sp: SP, tipo: Filtros["tipo"]): Filtros {
   const min = Number(uno(sp.min));
   const dias = uno(sp.dias);
+  const t = uno(sp.t);
   return {
-    tipo,
+    tipo: tipo === "todos" && (t === "reel" || t === "carrusel") ? t : tipo,
     formato: uno(sp.formato),
     referente: uno(sp.referente),
     orden: uno(sp.orden) || "outlier",
     min: Number.isFinite(min) && min > 0 ? min : 0,
+    minCom: Math.max(0, Number(uno(sp.mincom)) || 0),
     dias: dias === "" ? 90 : Number(dias) || 0,
     ganadores: uno(sp.ganadores) === "1",
     cta: uno(sp.cta) === "1",
@@ -53,6 +56,7 @@ function aplicarFiltros(q: any, f: Filtros, conFormato: boolean) {
   else if (conFormato && f.formato) q = q.eq("formato_id", Number(f.formato));
   if (f.referente) q = q.eq("referente_id", f.referente);
   if (f.min > 0) q = q.gte("outlier", f.min);
+  if (f.minCom > 0) q = q.gte("comentarios", f.minCom);
   if (f.dias > 0) q = q.gte("fecha_publicacion", new Date(Date.now() - f.dias * 86_400_000).toISOString());
   if (f.ganadores) q = q.eq("es_ganador", true);
   if (f.cta) q = q.not("palabra_clave", "is", null);
@@ -72,19 +76,49 @@ export async function listarPublicaciones(f: Filtros, limite = 120): Promise<Pub
   return (data ?? []) as Publicacion[];
 }
 
-// Cuántas piezas hay por formato con los filtros actuales (para las pestañas).
-export async function contarPorFormato(f: Filtros): Promise<Map<string, number>> {
-  let q = db().from("publicaciones_con_score").select("formato_id");
-  q = aplicarFiltros(q, f, false).limit(5000);
+// Cuántas piezas hay por formato y por tipo con los filtros actuales (para las pestañas).
+export type RankingFormato = { clave: string; piezas: number; ganadores: number; outlierMediano: number | null; comentariosPromedio: number };
+
+export async function contar(
+  f: Filtros,
+): Promise<{ porFormato: Map<string, number>; porTipo: Map<string, number>; ranking: RankingFormato[] }> {
+  let q = db().from("publicaciones_con_score").select("formato_id, tipo, outlier, es_ganador, comentarios");
+  q = aplicarFiltros(q, { ...f, tipo: "todos" }, false).limit(5000);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  const conteo = new Map<string, number>();
-  for (const fila of (data ?? []) as { formato_id: number | null }[]) {
-    const k = fila.formato_id === null ? "sin" : String(fila.formato_id);
-    conteo.set(k, (conteo.get(k) ?? 0) + 1);
-    conteo.set("", (conteo.get("") ?? 0) + 1);
+  const porFormato = new Map<string, number>();
+  const porTipo = new Map<string, number>();
+  const sumar = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+  const grupos = new Map<string, { outliers: number[]; ganadores: number; comentarios: number; piezas: number }>();
+  type Fila = { formato_id: number | null; tipo: string; outlier: number | null; es_ganador: boolean; comentarios: number | null };
+  for (const fila of (data ?? []) as Fila[]) {
+    const tipo = fila.tipo === "imagen" ? "carrusel" : fila.tipo;
+    sumar(porTipo, "todos");
+    sumar(porTipo, tipo);
+    if (f.tipo !== "todos" && tipo !== f.tipo) continue;
+    const clave = fila.formato_id === null ? "sin" : String(fila.formato_id);
+    sumar(porFormato, clave);
+    sumar(porFormato, "");
+    const g = grupos.get(clave) ?? { outliers: [], ganadores: 0, comentarios: 0, piezas: 0 };
+    g.piezas++;
+    if (fila.outlier !== null) g.outliers.push(Number(fila.outlier));
+    if (fila.es_ganador) g.ganadores++;
+    g.comentarios += fila.comentarios ?? 0;
+    grupos.set(clave, g);
   }
-  return conteo;
+  const ranking = [...grupos.entries()]
+    .map(([clave, g]) => {
+      const o = g.outliers.sort((a, b) => a - b);
+      return {
+        clave,
+        piezas: g.piezas,
+        ganadores: g.ganadores,
+        outlierMediano: o.length ? o[Math.floor(o.length / 2)] : null,
+        comentariosPromedio: Math.round(g.comentarios / g.piezas),
+      };
+    })
+    .sort((a, b) => (b.outlierMediano ?? 0) - (a.outlierMediano ?? 0));
+  return { porFormato, porTipo, ranking };
 }
 
 export async function obtenerPublicacion(id: string): Promise<Publicacion | null> {
@@ -168,4 +202,22 @@ export async function obtenerSecuencia(referenteId: string, dia: string): Promis
     .order("fecha_publicacion", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as Historia[];
+}
+
+// ---------- Banco de ideas ----------
+
+export async function idsGuardados(): Promise<Set<string>> {
+  const { data } = await db().from("ideas").select("publicacion_id").limit(5000);
+  return new Set(((data ?? []) as { publicacion_id: string }[]).map((r) => r.publicacion_id));
+}
+
+export async function listarIdeas(): Promise<Publicacion[]> {
+  const { data: ideas, error } = await db().from("ideas").select("publicacion_id, created_at").order("created_at", { ascending: false }).limit(500);
+  if (error) throw new Error(error.message);
+  const ids = ((ideas ?? []) as { publicacion_id: string }[]).map((i) => i.publicacion_id);
+  if (!ids.length) return [];
+  const { data, error: e2 } = await db().from("publicaciones_con_score").select("*").in("id", ids);
+  if (e2) throw new Error(e2.message);
+  const porId = new Map(((data ?? []) as Publicacion[]).map((p) => [p.id, p]));
+  return ids.map((id) => porId.get(id)).filter((p): p is Publicacion => Boolean(p));
 }

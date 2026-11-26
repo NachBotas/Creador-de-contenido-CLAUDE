@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { contarPorFormato, leerFiltros, listarFormatos, listarPublicaciones, listarReferentes, type Filtros } from "@/lib/datos";
+import { contar, idsGuardados, leerFiltros, listarFormatos, listarPublicaciones, listarReferentes, obtenerPublicacion, type Filtros } from "@/lib/datos";
 import type { Publicacion } from "@/lib/tipos";
 import AutoEnviar from "./AutoEnviar";
 import Encabezado, { Vacio } from "./Encabezado";
 import Tarjeta from "./Tarjeta";
+import PanelReferentes from "./PanelReferentes";
+import DetallePublicacion from "./DetallePublicacion";
+import { ControlModal } from "./Interactivos";
 
 type SP = Record<string, string | string[] | undefined>;
 
@@ -22,6 +25,15 @@ const PERIODOS = [
   ["90", "Últimos 3 meses"],
   ["180", "Últimos 6 meses"],
   ["0", "Todo"],
+] as const;
+
+const COMENTARIOS_MIN = [
+  ["0", "Cualquier cant. de comentarios"],
+  ["50", "50+ comentarios"],
+  ["100", "100+ comentarios"],
+  ["500", "500+ comentarios"],
+  ["1000", "1.000+ comentarios"],
+  ["5000", "5.000+ comentarios"],
 ] as const;
 
 const MINIMOS = [
@@ -55,13 +67,19 @@ export default async function VistaPublicaciones({
   porFormato: boolean;
 }) {
   const f = leerFiltros(sp, tipo);
-  const [formatos, referentes, pubs, conteo] = await Promise.all([
+  const ver = typeof sp.ver === "string" && /^[0-9a-f-]{36}$/.test(sp.ver) ? sp.ver : "";
+  const [formatos, referentes, pubs, { porFormato: conteo, porTipo, ranking }, guardadas, abierta] = await Promise.all([
     listarFormatos(),
     listarReferentes(),
     listarPublicaciones(f, f.vista === "tablero" ? 400 : 120),
-    porFormato ? contarPorFormato(f) : Promise.resolve(new Map<string, number>()),
+    contar(f),
+    idsGuardados(),
+    ver ? obtenerPublicacion(ver) : Promise.resolve(null),
   ]);
   const refPorId = new Map(referentes.map((r) => [r.id, r]));
+  const refActivo = f.referente ? refPorId.get(f.referente) : undefined;
+  const hrefVer = (id: string) => enlace(sp, { ver: id });
+  const hrefCerrar = enlace(sp, { ver: "" });
 
   const tabs = [
     { valor: "", nombre: "Todos" },
@@ -70,8 +88,12 @@ export default async function VistaPublicaciones({
   ];
 
   return (
-    <div className="mx-auto flex max-w-[1600px] flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
-      <Encabezado titulo={titulo} bajada={bajada}>
+    <div className="mx-auto grid max-w-[1700px] gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[230px_minmax(0,1fr)] lg:px-8">
+      <div className="max-lg:hidden">
+        <PanelReferentes referentes={referentes} activo={f.referente} enlace={(id) => enlace(sp, { referente: id, ver: "" })} />
+      </div>
+      <div className="flex min-w-0 flex-col gap-5">
+      <Encabezado titulo={refActivo ? `${titulo} · @${refActivo.ig_username}` : titulo} bajada={bajada}>
         {porFormato && (
           <div role="tablist" aria-label="Vista" className="inline-flex rounded-lg bg-panel p-1 text-xs">
             {(["grilla", "tablero"] as const).map((v) => (
@@ -88,6 +110,70 @@ export default async function VistaPublicaciones({
           </div>
         )}
       </Encabezado>
+
+      {tipo === "todos" && (
+        <div role="tablist" aria-label="Tipo" className="flex flex-wrap gap-1">
+          {(
+            [
+              ["", "Todos", "todos"],
+              ["reel", "Reels", "reel"],
+              ["carrusel", "Carruseles", "carrusel"],
+            ] as const
+          ).map(([v, nombre, k]) => {
+            const on = (f.tipo === "todos" ? "" : f.tipo) === v;
+            return (
+              <Link
+                key={k}
+                role="tab"
+                aria-selected={on}
+                scroll={false}
+                href={enlace(sp, { t: v, ver: "" })}
+                className={`rounded-lg border px-3 py-1.5 text-sm transition ${on ? "border-acento/50 bg-acento/10 text-texto" : "border-borde text-suave hover:text-texto"}`}
+              >
+                {nombre} <span className="ml-1 text-xs tabular-nums text-tenue">{porTipo.get(k) ?? 0}</span>
+              </Link>
+            );
+          })}
+          <Link
+            href={`/historias${f.referente ? `?referente=${f.referente}` : ""}`}
+            className="rounded-lg border border-borde px-3 py-1.5 text-sm text-suave hover:text-texto"
+          >
+            Historias →
+          </Link>
+        </div>
+      )}
+
+      {porFormato && ranking.some((r) => r.clave !== "sin") && (
+        <section aria-label="Formatos que más funcionan" className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium">
+            Qué formato funciona mejor <span className="font-normal text-tenue">· con los filtros actuales</span>
+          </h2>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {ranking
+              .filter((r) => r.clave !== "sin")
+              .map((r, i) => {
+                const nombre = formatos.find((x) => String(x.id) === r.clave)?.nombre ?? "—";
+                return (
+                  <Link
+                    key={r.clave}
+                    href={enlace(sp, { formato: r.clave, ver: "" })}
+                    scroll={false}
+                    className={`w-48 shrink-0 rounded-xl border p-3 transition hover:border-suave/40 ${i === 0 ? "border-ganador/50 bg-ganador/10" : "border-borde bg-panel"}`}
+                  >
+                    <p className="flex items-center justify-between text-sm font-medium">
+                      {nombre} {i === 0 && <span className="text-[10px] font-semibold text-ganador">TOP</span>}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums">{r.outlierMediano !== null ? `${r.outlierMediano.toFixed(1)}x` : "—"}</p>
+                    <p className="text-[11px] text-tenue">outlier mediano</p>
+                    <p className="mt-2 text-xs text-suave">
+                      {r.piezas} reels · {Math.round((r.ganadores / r.piezas) * 100)}% ganadores · {r.comentariosPromedio} com. prom.
+                    </p>
+                  </Link>
+                );
+              })}
+          </div>
+        </section>
+      )}
 
       {porFormato && f.vista === "grilla" && (
         <div role="tablist" aria-label="Formatos" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
@@ -112,6 +198,7 @@ export default async function VistaPublicaciones({
 
       <AutoEnviar className="flex flex-wrap items-center gap-2 rounded-xl border border-borde bg-panel p-3">
         {f.formato && <input type="hidden" name="formato" value={f.formato} />}
+        {tipo === "todos" && f.tipo !== "todos" && <input type="hidden" name="t" value={f.tipo} />}
         {f.vista === "tablero" && <input type="hidden" name="vista" value="tablero" />}
         <input
           type="search"
@@ -124,7 +211,8 @@ export default async function VistaPublicaciones({
         <Select name="orden" valor={f.orden} opciones={ORDENES} etiqueta="Ordenar por" />
         <Select name="dias" valor={String(f.dias)} opciones={PERIODOS} etiqueta="Período" />
         <Select name="min" valor={String(f.min)} opciones={MINIMOS} etiqueta="Outlier mínimo" />
-        <Select
+        <Select name="mincom" valor={String(f.minCom)} opciones={COMENTARIOS_MIN} etiqueta="Comentarios mínimos" />
+        <SelectMovil
           name="referente"
           valor={f.referente}
           opciones={[["", "Todos los referentes"], ...referentes.map((r) => [r.id, `@${r.ig_username}`] as const)]}
@@ -132,6 +220,15 @@ export default async function VistaPublicaciones({
         />
         <Check name="ganadores" on={f.ganadores} texto="Solo ganadores" />
         <Check name="cta" on={f.cta} texto="Piden comentar palabra" />
+        <a
+          href={`/api/exportar${enlace(sp, { ver: "", vista_de: f.tipo })}`}
+          className="ml-auto flex h-9 items-center gap-1.5 rounded-md border border-borde px-3 text-sm text-suave hover:bg-panel-2 hover:text-texto"
+        >
+          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+          </svg>
+          Exportar a Excel
+        </a>
         <noscript>
           <button className="h-9 rounded-md bg-acento px-3 text-sm font-medium text-black">Aplicar</button>
         </noscript>
@@ -153,12 +250,31 @@ export default async function VistaPublicaciones({
           )}
         </Vacio>
       ) : f.vista === "tablero" && porFormato ? (
-        <Tablero pubs={pubs} tabs={tabs.slice(1)} refPorId={refPorId} formatos={formatos} />
+        <Tablero pubs={pubs} tabs={tabs.slice(1)} refPorId={refPorId} formatos={formatos} hrefVer={hrefVer} guardadas={guardadas} />
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
           {pubs.map((p) => (
-            <Tarjeta key={p.id} p={p} referente={refPorId.get(p.referente_id)} formatos={formatos} mostrarFormato={porFormato} />
+            <Tarjeta key={p.id} p={p} href={hrefVer(p.id)} guardada={guardadas.has(p.id)} referente={refPorId.get(p.referente_id)} formatos={formatos} mostrarFormato={porFormato} />
           ))}
+        </div>
+      )}
+      </div>
+
+      {abierta && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-3 py-6 backdrop-blur-sm sm:px-6" role="dialog" aria-modal="true" aria-label="Detalle de la publicación">
+          <ControlModal hrefCerrar={hrefCerrar} />
+          <Link href={hrefCerrar} scroll={false} aria-hidden="true" tabIndex={-1} className="fixed inset-0 cursor-default" />
+          <div className="relative mx-auto max-w-6xl rounded-2xl border border-borde bg-panel p-4 shadow-2xl sm:p-6">
+            <Link
+              href={hrefCerrar}
+              scroll={false}
+              aria-label="Cerrar"
+              className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full text-xl text-suave hover:bg-panel-2 hover:text-texto"
+            >
+              ×
+            </Link>
+            <DetallePublicacion p={abierta} referente={refPorId.get(abierta.referente_id)} formatos={formatos} guardada={guardadas.has(abierta.id)} />
+          </div>
         </div>
       )}
     </div>
@@ -170,7 +286,11 @@ function Tablero({
   tabs,
   refPorId,
   formatos,
+  hrefVer,
+  guardadas,
 }: {
+  hrefVer: (id: string) => string;
+  guardadas: Set<string>;
   pubs: Publicacion[];
   tabs: { valor: string; nombre: string }[];
   refPorId: Map<string, import("@/lib/tipos").Referente>;
@@ -186,7 +306,7 @@ function Tablero({
               {t.nombre} <span className="text-xs tabular-nums text-tenue">{col.length}</span>
             </h2>
             {col.map((p) => (
-              <Tarjeta key={p.id} p={p} referente={refPorId.get(p.referente_id)} formatos={formatos} mostrarFormato />
+              <Tarjeta key={p.id} p={p} href={hrefVer(p.id)} guardada={guardadas.has(p.id)} referente={refPorId.get(p.referente_id)} formatos={formatos} mostrarFormato />
             ))}
             {!col.length && <p className="px-1 pb-2 text-xs text-tenue">Nada todavía.</p>}
           </section>
@@ -220,5 +340,14 @@ function Check({ name, on, texto }: { name: string; on: boolean; texto: string }
       <input type="checkbox" name={name} value="1" defaultChecked={on} className="accent-[var(--color-acento)]" />
       {texto}
     </label>
+  );
+}
+
+// En celular no se ve el panel lateral, así que el referente se elige con un desplegable.
+function SelectMovil(props: { name: string; valor: string; opciones: readonly (readonly [string, string])[]; etiqueta: string }) {
+  return (
+    <div className="lg:hidden">
+      <Select {...props} />
+    </div>
   );
 }

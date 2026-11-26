@@ -225,3 +225,45 @@ export async function procesarHistorias(items: Record<string, unknown>[]) {
   }
   return aGuardar.length;
 }
+
+// ---------- Transcripción de un reel (se cobra por reel, solo cuando la pedís) ----------
+
+export const ACTOR_TRANSCRIPCION = "steadyfetch~instagram-reel-transcript-scraper";
+
+export async function transcribirPublicacion(id: string) {
+  const { data: p, error } = await db().from("publicaciones").select("id, ig_id, tipo, analisis").eq("id", id).single();
+  if (error || !p) throw new Error("No encontré esa publicación");
+  if (p.tipo !== "reel") throw new Error("Solo se pueden transcribir reels");
+
+  const items = (await apify(`/acts/${ACTOR_TRANSCRIPCION}/run-sync-get-dataset-items?timeout=150`, {
+    method: "POST",
+    body: JSON.stringify({ reelUrls: [`https://www.instagram.com/reel/${p.ig_id}/`], includeOnScreenText: true }),
+  })) as Record<string, unknown>[];
+
+  const it = items.find((x) => x.status === "transcribed");
+  if (!it) {
+    const motivo = items.find((x) => !x._summary)?.statusReason;
+    throw new Error(motivo ? `No se pudo transcribir: ${motivo}` : "No se pudo transcribir este reel");
+  }
+  const texto = ((it.transcript as string) || (it.onScreenText as string) || "").trim();
+  const { error: e2 } = await db()
+    .from("publicaciones")
+    .update({
+      transcripcion: texto || "(El reel no tiene voz ni texto para transcribir)",
+      hook: (it.hook3s as string) || null,
+      analisis: {
+        ...((p.analisis as object) ?? {}),
+        transcripcion: {
+          idioma: (it.language as string) ?? null,
+          segmentos: ((it.segments as { start: number; end: number; text: string }[]) ?? []).map((s) => ({
+            start: Math.round(s.start * 10) / 10,
+            end: Math.round(s.end * 10) / 10,
+            text: s.text.trim(),
+          })),
+          texto_en_pantalla: (it.onScreenText as string) ?? null,
+        },
+      },
+    })
+    .eq("id", id);
+  if (e2) throw new Error(e2.message);
+}

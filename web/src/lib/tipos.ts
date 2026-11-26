@@ -31,6 +31,10 @@ export type Publicacion = {
   hook: string | null;
   cta_tipo: string | null;
   palabra_clave: string | null;
+  transcripcion: string | null;
+  analisis: {
+    transcripcion?: { idioma?: string | null; segmentos?: { start: number; end: number; text: string }[]; texto_en_pantalla?: string | null };
+  } | null;
   fijado: boolean;
   metrica: number | null;
   outlier: number | null;

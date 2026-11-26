@@ -113,3 +113,17 @@ export async function eliminarFormato(id: number) {
   await db().from("formatos").delete().eq("id", id);
   revalidatePath("/", "layout");
 }
+
+// ---------- Banco de ideas ----------
+
+export async function guardarIdea(publicacionId: string) {
+  await exigirSesion();
+  await db().from("ideas").upsert({ publicacion_id: publicacionId }, { onConflict: "publicacion_id" });
+  revalidatePath("/", "layout");
+}
+
+export async function quitarIdea(publicacionId: string) {
+  await exigirSesion();
+  await db().from("ideas").delete().eq("publicacion_id", publicacionId);
+  revalidatePath("/", "layout");
+}

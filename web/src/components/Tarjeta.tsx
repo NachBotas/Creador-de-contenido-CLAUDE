@@ -10,7 +10,11 @@ export default function Tarjeta({
   referente,
   formatos,
   mostrarFormato,
+  href,
+  guardada,
 }: {
+  href: string;
+  guardada?: boolean;
   p: Publicacion;
   referente?: Referente;
   formatos: Formato[];
@@ -19,7 +23,7 @@ export default function Tarjeta({
   const esReel = p.tipo === "reel";
   return (
     <article className="group flex flex-col overflow-hidden rounded-xl border border-borde bg-panel transition hover:border-suave/40">
-      <Link href={`/p/${p.id}`} className="relative block bg-black" aria-label={`Ver detalle: ${p.caption?.slice(0, 60) ?? "publicación"}`}>
+      <Link href={href} scroll={false} className="relative block bg-black" aria-label={`Ver detalle: ${p.caption?.slice(0, 60) ?? "publicación"}`}>
         <div className={esReel ? "aspect-[9/14]" : "aspect-[4/5]"}>
           {p.miniatura_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -41,6 +45,9 @@ export default function Tarjeta({
           >
             {multiplicador(p.outlier)}
           </span>
+        )}
+        {guardada && (
+          <span className="absolute bottom-2 right-2 rounded-md bg-acento px-1.5 py-0.5 text-[10px] font-semibold text-black">Guardada</span>
         )}
         {p.fijado && <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] text-white">Fijado</span>}
       </Link>
