@@ -13,3 +13,9 @@
 - **Detalle:** `docs/pendiente-manychat-trazabilidad.md`.
 - **A futuro:** conectar la app de alumnos del socio (otro Vercel) para marcar los cierres solos,
   cruzando por @ de Instagram, email o teléfono.
+
+## Descartado por ahora (código guardado, sin usar)
+- **Google Drive para historias** (`web/src/lib/drive.ts`, `docs/guia-google-drive.md`): se sacó de la pantalla.
+  Las historias siguen guardándose en Supabase (miniatura) como antes.
+- **Sort Feed** (`web/src/lib/sortfeed.ts`, `scripts/importar_sortfeed.py`): se sacó el panel de importar.
+  Feed, historias y transcripciones van todos por Apify.
