@@ -25,21 +25,23 @@ export default function FormSync({
   modo,
   inicial,
   cuentaInicial = "",
+  volverA,
 }: {
   accion: (form: FormData) => Promise<void>;
   referentes: Ref[];
   modo: "ahora" | "diaria";
   inicial: { feed: boolean; historias: boolean; dias: number; maximo: number };
   cuentaInicial?: string;
+  volverA?: "contenido";
 }) {
   const [feed, setFeed] = useState(inicial.feed);
   const [historias, setHistorias] = useState(inicial.historias);
   const [dias, setDias] = useState(inicial.dias);
   const [maximo, setMaximo] = useState(inicial.maximo);
-  const [cuenta, setCuenta] = useState(cuentaInicial);
   const [enviando, setEnviando] = useState(false);
   const [idsFeed, setIdsFeed] = useState(() => new Set(referentes.filter((r) => r.contenido).map((r) => r.id)));
   const [idsHist, setIdsHist] = useState(() => new Set(referentes.filter((r) => r.historias).map((r) => r.id)));
+  const [idsAhora, setIdsAhora] = useState(() => new Set(cuentaInicial ? [cuentaInicial] : referentes.map((r) => r.id)));
   const alternar = (set: Set<string>, fijar: (s: Set<string>) => void, id: string) => {
     const n = new Set(set);
     if (n.has(id)) n.delete(id);
@@ -47,8 +49,8 @@ export default function FormSync({
     fijar(n);
   };
 
-  const nFeed = cuenta ? 1 : idsFeed.size;
-  const nHist = cuenta ? 1 : idsHist.size;
+  const nFeed = modo === "ahora" ? idsAhora.size : idsFeed.size;
+  const nHist = modo === "ahora" ? idsAhora.size : idsHist.size;
   const costoFeed = feed ? nFeed * (maximo * PRECIO_POST + PRECIO_PERFIL) : 0;
   const costoHist = historias ? nHist * HISTORIAS_X_CUENTA * PRECIO_HISTORIA : 0;
   const total = costoFeed + costoHist;
@@ -57,18 +59,22 @@ export default function FormSync({
 
   return (
     <form action={accion} onSubmit={() => setEnviando(true)} className="flex flex-col gap-4">
+      {volverA && <input type="hidden" name="volver" value={volverA} />}
       {modo === "ahora" && (
-        <label className="flex flex-col gap-1 text-xs text-suave">
-          Cuentas
-          <select name="id" value={cuenta} onChange={(e) => setCuenta(e.target.value)} className={sel}>
-            <option value="">Todas (según sus interruptores)</option>
-            {referentes.map((r) => (
-              <option key={r.id} value={r.id}>
-                @{r.usuario}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between text-xs text-suave">
+            <span>Cuentas · {idsAhora.size} de {referentes.length}</span>
+            <span className="flex gap-3">
+              <button type="button" onClick={() => setIdsAhora(new Set(referentes.map((r) => r.id)))} className="text-acento hover:underline">
+                Todas
+              </button>
+              <button type="button" onClick={() => setIdsAhora(new Set())} className="hover:text-texto">
+                Ninguna
+              </button>
+            </span>
+          </div>
+          <Cuentas nombre="ids" referentes={referentes} elegidas={idsAhora} alternar={(id) => alternar(idsAhora, setIdsAhora, id)} sinMargen />
+        </div>
       )}
 
       <fieldset className="flex flex-col gap-3">
@@ -128,7 +134,7 @@ export default function FormSync({
       </div>
 
       <button
-        disabled={enviando || (!feed && !historias)}
+        disabled={enviando || (!feed && !historias) || (modo === "ahora" && idsAhora.size === 0)}
         className="h-10 rounded-md bg-acento px-4 text-sm font-semibold text-black hover:bg-acento-osc disabled:opacity-50"
       >
         {enviando ? "Un momento…" : modo === "ahora" ? "Sincronizar ahora" : "Guardar sincronización automática"}
@@ -137,12 +143,26 @@ export default function FormSync({
   );
 }
 
-function Cuentas({ nombre, referentes, elegidas, alternar }: { nombre: string; referentes: Ref[]; elegidas: Set<string>; alternar: (id: string) => void }) {
+function Cuentas({
+  nombre,
+  referentes,
+  elegidas,
+  alternar,
+  sinMargen,
+}: {
+  nombre: string;
+  referentes: Ref[];
+  elegidas: Set<string>;
+  alternar: (id: string) => void;
+  sinMargen?: boolean;
+}) {
   return (
-    <div className="ml-6 flex flex-col gap-1.5 rounded-lg border border-borde bg-fondo p-3">
-      <p className="text-xs text-suave">
-        De qué cuentas · {elegidas.size} de {referentes.length}
-      </p>
+    <div className={`flex flex-col gap-1.5 rounded-lg border border-borde bg-fondo p-3 ${sinMargen ? "" : "ml-6"}`}>
+      {!sinMargen && (
+        <p className="text-xs text-suave">
+          De qué cuentas · {elegidas.size} de {referentes.length}
+        </p>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {referentes.map((r) => {
           const on = elegidas.has(r.id);

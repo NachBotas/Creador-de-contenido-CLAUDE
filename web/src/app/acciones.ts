@@ -57,7 +57,7 @@ export async function agregarReferente(form: FormData) {
   if (error) volver("/referentes", error.message, true);
   let msg = `@${usuario} agregado.`;
   try {
-    msg += " " + (await iniciarSincronizacion({ ...SYNC_PRIMERA_VEZ, referenteId: data!.id }));
+    msg += " " + (await iniciarSincronizacion({ ...SYNC_PRIMERA_VEZ, referenteIds: [data!.id] }));
   } catch (e) {
     msg += ` No se pudo sincronizar todavía: ${(e as Error).message}`;
   }
@@ -92,12 +92,14 @@ function leerOpciones(form: FormData) {
 
 export async function sincronizar(form: FormData) {
   await exigirSesion();
-  const id = String(form.get("id") ?? "") || undefined;
+  const ids = form.getAll("ids").map(String).filter(Boolean);
+  const destino = String(form.get("volver") ?? "") === "contenido" ? "/" : "/referentes";
+  if (!ids.length) volver(destino, "Elegí al menos una cuenta.", true);
   try {
-    volver("/referentes", await iniciarSincronizacion({ ...leerOpciones(form), referenteId: id }));
+    volver(destino, await iniciarSincronizacion({ ...leerOpciones(form), referenteIds: ids }));
   } catch (e) {
     if ((e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw e;
-    volver("/referentes", (e as Error).message, true);
+    volver(destino, (e as Error).message, true);
   }
 }
 

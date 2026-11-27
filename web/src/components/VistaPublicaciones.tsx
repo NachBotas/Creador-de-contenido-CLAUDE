@@ -2,7 +2,9 @@ import Link from "next/link";
 import { contar, contarHistorias, listarSecuencias, idsGuardados, leerFiltros, listarFormatos, listarPublicaciones, listarReferentes, obtenerPublicacion, type Filtros } from "@/lib/datos";
 import type { Publicacion } from "@/lib/tipos";
 import AutoEnviar from "./AutoEnviar";
-import Encabezado, { Vacio } from "./Encabezado";
+import Encabezado, { Aviso, Vacio } from "./Encabezado";
+import FormSync from "./FormSync";
+import { sincronizar } from "@/app/acciones";
 import Tarjeta from "./Tarjeta";
 import PanelReferentes from "./PanelReferentes";
 import DetallePublicacion from "./DetallePublicacion";
@@ -148,6 +150,32 @@ export default async function VistaPublicaciones({
           </div>
         )}
       </Encabezado>
+
+      <Aviso msg={typeof sp.msg === "string" ? sp.msg : undefined} error={typeof sp.error === "string" ? sp.error : undefined} />
+
+      {tipo === "todos" && referentes.length > 0 && (
+        <details className="group rounded-xl border border-borde bg-panel">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+            <svg viewBox="0 0 24 24" className="size-4 text-acento" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M21 12a9 9 0 0 1-15.5 6.2M3 12a9 9 0 0 1 15.5-6.2M21 4v5h-5M3 20v-5h5" />
+            </svg>
+            Sincronizar ahora
+            <span className="font-normal text-tenue">· elegí cuentas y qué traer</span>
+            <span className="ml-auto text-xs text-tenue group-open:hidden">Abrir</span>
+            <span className="ml-auto hidden text-xs text-tenue group-open:inline">Cerrar</span>
+          </summary>
+          <div className="border-t border-borde p-4">
+            <FormSync
+              accion={sincronizar}
+              referentes={referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo }))}
+              modo="ahora"
+              inicial={{ feed: true, historias: true, dias: 7, maximo: 10 }}
+              cuentaInicial={f.referente}
+              volverA="contenido"
+            />
+          </div>
+        </details>
+      )}
 
       {tipo === "todos" && (
         <div role="tablist" aria-label="Tipo" className="flex flex-wrap gap-1">

@@ -45,22 +45,22 @@ async function arrancar(actor: string, input: unknown, tipo: TipoCorrida) {
 }
 
 export type OpcionesSync = {
-  referenteId?: string; // vacío = todas las cuentas
+  referenteIds?: string[]; // vacío = todas las cuentas (según sus interruptores)
   feed: boolean; // reels y carruseles
   historias: boolean;
   dias: number; // cuánto hacia atrás en el feed (0 = sin límite)
   maximo: number; // tope de publicaciones por cuenta
 };
 
-export const SYNC_DIARIA_DEFECTO: Omit<OpcionesSync, "referenteId"> = { feed: true, historias: true, dias: 7, maximo: 8 };
-export const SYNC_PRIMERA_VEZ: Omit<OpcionesSync, "referenteId"> = { feed: true, historias: true, dias: 30, maximo: 30 };
+export const SYNC_DIARIA_DEFECTO: Omit<OpcionesSync, "referenteIds"> = { feed: true, historias: true, dias: 7, maximo: 8 };
+export const SYNC_PRIMERA_VEZ: Omit<OpcionesSync, "referenteIds"> = { feed: true, historias: true, dias: 30, maximo: 30 };
 
-export async function leerSyncDiaria(): Promise<Omit<OpcionesSync, "referenteId">> {
+export async function leerSyncDiaria(): Promise<Omit<OpcionesSync, "referenteIds">> {
   const { data } = await db().from("ajustes").select("valor").eq("clave", "sync_diaria").maybeSingle();
   return { ...SYNC_DIARIA_DEFECTO, ...((data?.valor as object) ?? {}) };
 }
 
-export async function guardarSyncDiaria(o: Omit<OpcionesSync, "referenteId">) {
+export async function guardarSyncDiaria(o: Omit<OpcionesSync, "referenteIds">) {
   const { error } = await db().from("ajustes").upsert({ clave: "sync_diaria", valor: o, updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
 }
@@ -68,14 +68,14 @@ export async function guardarSyncDiaria(o: Omit<OpcionesSync, "referenteId">) {
 export async function iniciarSincronizacion(o: OpcionesSync): Promise<string> {
   if (!o.feed && !o.historias) return "Elegí al menos feed o historias.";
   let q = db().from("referentes").select("id, ig_username, contenido_activo, historias_activo");
-  if (o.referenteId) q = q.eq("id", o.referenteId);
+  if (o.referenteIds?.length) q = q.in("id", o.referenteIds);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   const refs = (data ?? []) as { ig_username: string; contenido_activo: boolean; historias_activo: boolean }[];
   if (!refs.length) return "No hay referentes para sincronizar.";
 
-  // Con una sola cuenta elegida, se respeta lo pedido aunque tenga el interruptor apagado.
-  const una = Boolean(o.referenteId);
+  // Con cuentas elegidas a mano, se respeta lo pedido aunque tengan el interruptor apagado.
+  const una = Boolean(o.referenteIds?.length);
   const conFeed = o.feed ? refs.filter((r) => una || r.contenido_activo) : [];
   const conHistorias = o.historias ? refs.filter((r) => una || r.historias_activo) : [];
   const url = (u: string) => `https://www.instagram.com/${u}/`;
