@@ -9,5 +9,7 @@
   Necesita además el permiso `instagram_business_manage_comments`.
 
 ## Trazabilidad de clientes con ManyChat
-- **Estado:** en curso.
+- **Estado:** primera versión publicada (secciones **Negocios** y **Clientes**). Falta probarla con un token real.
 - **Detalle:** `docs/pendiente-manychat-trazabilidad.md`.
+- **A futuro:** conectar la app de alumnos del socio (otro Vercel) para marcar los cierres solos,
+  cruzando por @ de Instagram, email o teléfono.

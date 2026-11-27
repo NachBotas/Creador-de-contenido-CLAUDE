@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { actualizarCuenta, conectarManychatAccion, desconectarManychat } from "@/app/acciones";
+import { actualizarCuenta } from "@/app/acciones";
 import { demografiaDe, diariasDe, listarCuentas, postsDe, type PostPropio } from "@/lib/metricas";
-import { conexionDe, resumenConversaciones } from "@/lib/manychat";
-import { urlPublica } from "@/lib/apify";
 import { fechaCorta, fechaHora, numero } from "@/lib/formato";
 import { Aviso } from "@/components/Encabezado";
 import { Barras, Kpi, Linea, Tarjeta } from "@/components/Graficos";
-import { Copiar, Desconectar } from "@/components/Invitar";
+import { Desconectar } from "@/components/Invitar";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -17,7 +15,6 @@ const TABS = [
   ["resumen", "Resumen"],
   ["audiencia", "Audiencia"],
   ["contenido", "Contenido"],
-  ["conversaciones", "Conversaciones"],
 ] as const;
 const DIAS = [
   ["30", "30 días"],
@@ -100,7 +97,6 @@ export default async function PanelCuenta({ params, searchParams }: { params: Pr
       {tab === "resumen" && <Resumen id={id} dias={dias} seguidores={c.seguidores} />}
       {tab === "audiencia" && <Audiencia id={id} />}
       {tab === "contenido" && <Contenido id={id} dias={dias} orden={sp.orden ?? "fecha"} link={link} />}
-      {tab === "conversaciones" && <Conversaciones id={id} dias={dias} />}
     </div>
   );
 }
@@ -267,93 +263,6 @@ function Dato({ t, v }: { t: string; v: number | null }) {
     <div>
       <dt className="text-[10px] text-tenue">{t}</dt>
       <dd>{numero(v)}</dd>
-    </div>
-  );
-}
-
-async function Conversaciones({ id, dias }: { id: string; dias: number }) {
-  const conexion = await conexionDe(id);
-  if (!conexion) {
-    return (
-      <form action={conectarManychatAccion} className="flex max-w-lg flex-col gap-3 rounded-xl border border-borde bg-panel p-5">
-        <p className="font-medium">Conectá ManyChat</p>
-        <p className="text-sm text-suave">Para saber qué reel, carrusel o historia trajo cada conversación.</p>
-        <input type="hidden" name="cuenta" value={id} />
-        <label htmlFor="token" className="text-xs text-suave">
-          Token de ManyChat (Settings → API)
-        </label>
-        <input id="token" name="token" type="password" required autoComplete="off" placeholder="Pegalo acá" className="h-10 rounded-md border border-borde bg-fondo px-3 text-sm outline-none focus:border-acento" />
-        <p className="text-[11px] text-tenue">Solo lo usamos para verificar la cuenta y leer su nombre. Se guarda cifrado y nunca se manda ningún mensaje.</p>
-        <button className="h-10 rounded-md bg-acento text-sm font-semibold text-black hover:bg-acento-osc">Conectar</button>
-        <p className="text-[11px] text-tenue">Se cuentan las conversaciones desde que conectás: ManyChat no permite leer las anteriores.</p>
-      </form>
-    );
-  }
-  const r = await resumenConversaciones(conexion.id, dias);
-  const url = `${urlPublica() ?? ""}/api/manychat/evento`;
-  const tipos = [
-    { clave: "Reels", valor: r.porTipo.get("reel") ?? 0 },
-    { clave: "Historias", valor: r.porTipo.get("historia") ?? 0 },
-    { clave: "Carruseles", valor: r.porTipo.get("carrusel") ?? 0 },
-    { clave: "Otras", valor: r.porTipo.get("otro") ?? 0 },
-  ].filter((t) => t.valor > 0);
-  const porDia = [...r.porDia.entries()].sort().map(([x, y]) => ({ x, y }));
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi titulo={`Personas que escribieron (${dias} días)`} valor={numero(r.total)} />
-        <Kpi titulo="Etiquetas con conversaciones" valor={String(r.porEtiqueta.length)} />
-        <Kpi titulo="Mejor contenido" valor={r.porEtiqueta[0]?.[0] ?? "—"} nota={r.porEtiqueta[0] ? `${r.porEtiqueta[0][1]} personas` : undefined} />
-        <Kpi titulo="Cuenta de ManyChat" valor={conexion.nombre_pagina ?? "—"} />
-      </div>
-      {r.total > 0 && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Tarjeta titulo="Por contenido (etiqueta)">
-            <Barras filas={r.porEtiqueta.map(([clave, valor]) => ({ clave, valor }))} max={20} />
-          </Tarjeta>
-          <div className="flex flex-col gap-4">
-            <Tarjeta titulo="Por tipo">
-              <Barras filas={tipos} />
-            </Tarjeta>
-            {porDia.length >= 2 && (
-              <Tarjeta titulo="Por día">
-                <Linea puntos={porDia} alto={150} etiqueta="Conversaciones por día" />
-              </Tarjeta>
-            )}
-          </div>
-        </div>
-      )}
-
-      <details className="rounded-xl border border-borde bg-panel p-5" open={r.total === 0}>
-        <summary className="cursor-pointer font-medium">Cómo configurar cada flow de ManyChat</summary>
-        <ol className="mt-4 flex list-inside list-decimal flex-col gap-3 text-sm text-suave">
-          <li>
-            En ManyChat abrí el flow del contenido → <strong className="text-texto">Acciones → Solicitud externa</strong> (External Request) → método{" "}
-            <strong className="text-texto">POST</strong>. Requiere ManyChat Pro.
-          </li>
-          <li>Pegá estos tres datos:</li>
-        </ol>
-        <div className="mt-3 flex flex-col gap-2">
-          <Copiar etiqueta="URL de la solicitud" texto={url} />
-          <Copiar etiqueta="Encabezado · Key: Authorization · Value:" texto={`Bearer ${conexion.secreto}`} />
-          <Copiar etiqueta="Cuerpo (JSON)" texto={`{\n  "etiqueta": "reel-nombre-del-contenido",\n  "subscriber_id": "{{user.id}}"\n}`} />
-        </div>
-        <ul className="mt-3 flex list-inside list-disc flex-col gap-1.5 text-xs text-suave">
-          <li>
-            El <code>{"{{user.id}}"}</code> no se escribe: se elige con el botón de ManyChat para agregar un campo → <em>Id de contacto</em>.
-          </li>
-          <li>
-            Empezá la etiqueta con <code>reel-</code>, <code>historia-</code> o <code>carrusel-</code> para que la app sepa el tipo. Ejemplo: <code>reel-talking-head-precios</code>.
-          </li>
-          <li>Para los demás flows duplicá el paso y cambiá solo la etiqueta.</li>
-        </ul>
-        <form action={desconectarManychat} className="mt-4">
-          <input type="hidden" name="id" value={conexion.id} />
-          <input type="hidden" name="cuenta" value={id} />
-          <button className="text-xs text-tenue hover:text-peligro">Desconectar ManyChat</button>
-        </form>
-      </details>
     </div>
   );
 }

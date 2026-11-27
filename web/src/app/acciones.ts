@@ -157,28 +157,112 @@ export async function desconectarCuenta(id: string) {
   redirect("/metricas");
 }
 
-export async function conectarManychatAccion(form: FormData) {
+// ---------- Negocios (hasta 5) y ManyChat ----------
+
+export async function crearNegocio(form: FormData) {
   await exigirSesion();
-  const cuenta = String(form.get("cuenta") ?? "");
+  const nombre = String(form.get("nombre") ?? "").trim().slice(0, 40);
+  const ig = String(form.get("ig") ?? "").trim().replace(/^@/, "").slice(0, 30) || null;
+  if (!nombre) volver("/negocios", "Poné un nombre para el negocio.", true);
+  const { count } = await db().from("negocios").select("id", { count: "exact", head: true });
+  if ((count ?? 0) >= 5) volver("/negocios", "Ya tenés 5 negocios, que es el máximo.", true);
+  const { error } = await db().from("negocios").insert({ nombre, ig_username: ig, orden: (count ?? 0) + 1 });
+  if (error) volver("/negocios", error.message, true);
+  revalidatePath("/", "layout");
+  volver("/negocios", `Negocio "${nombre}" creado. Ahora conectá su ManyChat.`);
+}
+
+export async function editarNegocio(form: FormData) {
+  await exigirSesion();
+  const id = String(form.get("id") ?? "");
+  const nombre = String(form.get("nombre") ?? "").trim().slice(0, 40);
+  const ig = String(form.get("ig") ?? "").trim().replace(/^@/, "").slice(0, 30) || null;
+  if (!nombre) volver("/negocios", "El nombre no puede quedar vacío.", true);
+  await db().from("negocios").update({ nombre, ig_username: ig }).eq("id", id);
+  revalidatePath("/", "layout");
+  volver("/negocios", "Cambios guardados.");
+}
+
+export async function eliminarNegocio(id: string) {
+  await exigirSesion();
+  await db().from("negocios").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function conectarManychatNegocio(form: FormData) {
+  await exigirSesion();
+  const negocio = String(form.get("negocio") ?? "");
   const token = String(form.get("token") ?? "").trim();
-  const ruta = `/metricas/${cuenta}?tab=conversaciones`;
-  if (token.length < 10) redirect(`${ruta}&error=${encodeURIComponent("Pegá el token completo de ManyChat.")}`);
+  if (token.length < 10) volver("/negocios", "Pegá el token completo de ManyChat.", true);
   const { conectarManychat } = await import("@/lib/manychat");
   let nombre = "";
   try {
-    nombre = await conectarManychat(token, cuenta || null);
+    nombre = await conectarManychat(token, negocio);
   } catch (e) {
-    redirect(`${ruta}&error=${encodeURIComponent((e as Error).message)}`);
+    volver("/negocios", (e as Error).message, true);
   }
-  revalidatePath("/metricas", "layout");
-  redirect(`${ruta}&msg=${encodeURIComponent(`ManyChat conectado: ${nombre}. Verificá que sea la cuenta correcta.`)}`);
+  revalidatePath("/", "layout");
+  volver("/negocios", `ManyChat conectado: «${nombre}». Verificá que sea la cuenta correcta de ese negocio.`);
 }
 
-export async function desconectarManychat(form: FormData) {
+export async function desconectarManychatNegocio(form: FormData) {
+  await exigirSesion();
+  await db().from("manychat_conexiones").delete().eq("negocio_id", String(form.get("negocio") ?? ""));
+  revalidatePath("/", "layout");
+  volver("/negocios", "ManyChat desconectado.");
+}
+
+// ---------- Trazabilidad ----------
+
+export async function abrirContacto(form: FormData) {
+  await exigirSesion();
+  const negocio = String(form.get("negocio") ?? "");
+  const sub = String(form.get("subscriber") ?? "");
+  const { guardarContacto } = await import("@/lib/manychat");
+  let id = "";
+  try {
+    id = await guardarContacto(negocio, sub);
+  } catch (e) {
+    redirect(`/clientes?n=${negocio}&error=${encodeURIComponent((e as Error).message)}`);
+  }
+  redirect(`/clientes/${id}`);
+}
+
+export async function actualizarContacto(form: FormData) {
   await exigirSesion();
   const id = String(form.get("id") ?? "");
-  const cuenta = String(form.get("cuenta") ?? "");
-  await db().from("manychat_conexiones").delete().eq("id", id);
-  revalidatePath("/metricas", "layout");
-  redirect(`/metricas/${cuenta}?tab=conversaciones`);
+  const { data } = await db().from("contactos").select("negocio_id, subscriber_id").eq("id", id).single();
+  const { guardarContacto } = await import("@/lib/manychat");
+  try {
+    await guardarContacto((data as { negocio_id: string }).negocio_id, (data as { subscriber_id: string }).subscriber_id);
+  } catch (e) {
+    redirect(`/clientes/${id}?error=${encodeURIComponent((e as Error).message)}`);
+  }
+  revalidatePath(`/clientes/${id}`);
+  redirect(`/clientes/${id}?msg=${encodeURIComponent("Etiquetas actualizadas desde ManyChat.")}`);
+}
+
+export async function guardarCierre(form: FormData) {
+  await exigirSesion();
+  const id = String(form.get("id") ?? "");
+  const cerrado = form.get("cerrado") === "1";
+  const monto = Number(String(form.get("monto") ?? "").replace(/[^\d.,]/g, "").replace(",", "."));
+  await db()
+    .from("contactos")
+    .update({
+      cerrado,
+      fecha_cierre: cerrado ? String(form.get("fecha") || new Date().toISOString().slice(0, 10)) : null,
+      monto: cerrado && Number.isFinite(monto) && monto > 0 ? monto : null,
+      nota: String(form.get("nota") ?? "").slice(0, 1000) || null,
+    })
+    .eq("id", id);
+  revalidatePath("/clientes", "layout");
+  redirect(`/clientes/${id}?msg=${encodeURIComponent(cerrado ? "Marcado como cliente." : "Guardado.")}`);
+}
+
+export async function eliminarContacto(id: string, negocio: string) {
+  await exigirSesion();
+  await db().from("contactos").delete().eq("id", id);
+  revalidatePath("/clientes", "layout");
+  redirect(`/clientes?n=${negocio}`);
 }

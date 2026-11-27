@@ -10,6 +10,8 @@ const ITEMS = [
   { href: "/carruseles", etiqueta: "Carruseles", detalle: "Slides y portadas", icono: "M3 6h13v13H3zM19 8v12H7" },
   { href: "/historias", etiqueta: "Historias", detalle: "Secuencias por día", icono: "M12 3a9 9 0 1 0 9 9M12 3a9 9 0 0 1 9 9M12 7v5l3 2" },
   { href: "/ideas", etiqueta: "Banco de ideas", detalle: "Lo que guardaste", icono: "M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2Z" },
+  { href: "/clientes", etiqueta: "Clientes", detalle: "De dónde vino cada uno", icono: "M3 12h4l3 8 4-16 3 8h4" },
+  { href: "/negocios", etiqueta: "Negocios", detalle: "Tus cuentas y ManyChat", icono: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" },
   { href: "/metricas", etiqueta: "Métricas", detalle: "Tus cuentas y clientes", icono: "M18 20V10M12 20V4M6 20v-6" },
   { href: "/referentes", etiqueta: "Referentes", detalle: "Cuentas y formatos", icono: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8" },
 ];
