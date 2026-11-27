@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { completarPortadas, iniciarSincronizacion, leerSyncDiaria } from "@/lib/apify";
 import { instagramConfigurado, sincronizarTodasLasCuentas } from "@/lib/instagram";
+import { subirHistoriasPendientes } from "@/lib/drive";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -22,6 +23,8 @@ export async function GET(req: Request) {
   } catch (e) {
     resultado.errorPortadas = (e as Error).message;
   }
+  // Lo que haya quedado sin subir a Drive en capturas anteriores
+  resultado.drive = await subirHistoriasPendientes(60_000).catch((e) => (e as Error).message);
   if (instagramConfigurado()) resultado.cuentasActualizadas = await sincronizarTodasLasCuentas();
   return NextResponse.json({ ok: !resultado.errorReferentes, ...resultado });
 }

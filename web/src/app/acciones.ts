@@ -323,3 +323,26 @@ export async function eliminarContacto(id: string, negocio: string) {
   revalidatePath("/clientes", "layout");
   redirect(`/clientes?n=${negocio}`);
 }
+
+// ---------- Google Drive (historias) ----------
+
+export async function desconectarDriveAccion() {
+  await exigirSesion();
+  const { desconectarDrive } = await import("@/lib/drive");
+  await desconectarDrive();
+  revalidatePath("/referentes");
+  volver("/referentes", "Google Drive desconectado. Los archivos ya subidos siguen en tu Drive.");
+}
+
+export async function subirDriveAhora() {
+  await exigirSesion();
+  const { subirHistoriasPendientes } = await import("@/lib/drive");
+  let msg = "";
+  try {
+    msg = await subirHistoriasPendientes(50_000);
+  } catch (e) {
+    volver("/referentes", (e as Error).message, true);
+  }
+  revalidatePath("/", "layout");
+  volver("/referentes", msg);
+}

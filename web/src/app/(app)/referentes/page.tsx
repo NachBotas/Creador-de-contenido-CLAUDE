@@ -1,3 +1,5 @@
+import { desconectarDriveAccion, subirDriveAhora } from "@/app/acciones";
+import { driveConfigurado, estadoDrive } from "@/lib/drive";
 import { agregarFormato, agregarReferente, completarPortadasAccion, importarSortFeedAccion, guardarAjusteSync, sincronizar } from "@/app/acciones";
 import { leerSyncDiaria, pendientesDePortada } from "@/lib/apify";
 import FormSync from "@/components/FormSync";
@@ -11,7 +13,7 @@ export const metadata = { title: "Referentes · Radar de contenido" };
 
 export default async function Referentes({ searchParams }: { searchParams: Promise<{ msg?: string; error?: string; sync?: string }> }) {
   const { msg, error, sync } = await searchParams;
-  const [referentes, formatos, conteos, diaria, sinPortada] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente(), leerSyncDiaria(), pendientesDePortada()]);
+  const [referentes, formatos, conteos, diaria, sinPortada, drive] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente(), leerSyncDiaria(), pendientesDePortada(), estadoDrive()]);
   const refsSync = referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo }));
 
   return (
@@ -132,6 +134,39 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
           </section>
         </div>
       )}
+
+      <section id="drive" className="flex scroll-mt-6 flex-col gap-3 rounded-xl border border-borde bg-panel p-5">
+        <div>
+          <h2 className="font-medium">Historias en Google Drive</h2>
+          <p className="text-sm text-suave">
+            Cada historia capturada se guarda completa (video o imagen) en tu Drive, en «Radar – Historias / @cuenta / fecha». La app solo puede ver los archivos que
+            ella misma crea. Podés mover la carpeta adonde quieras, y si borrás archivos para liberar espacio, la app sigue mostrando la miniatura.
+          </p>
+        </div>
+        {!driveConfigurado() ? (
+          <p className="rounded-lg border border-ganador/40 bg-ganador/10 p-3 text-sm">Falta configurar el permiso de Google (GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Vercel). Pedile a Claude la guía.</p>
+        ) : drive.conectado ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="min-w-0 flex-1 text-sm">
+              <span className="mr-2 inline-block size-2 rounded-full bg-acento" aria-hidden="true" />
+              Conectado{drive.email ? ` a ${drive.email}` : ""}.{" "}
+              <a href={drive.carpetaUrl!} target="_blank" rel="noreferrer" className="text-acento hover:underline">
+                Abrir la carpeta ↗
+              </a>
+            </p>
+            <form action={subirDriveAhora}>
+              <button className="h-9 rounded-lg border border-borde px-3 text-sm hover:bg-panel-2">Subir pendientes ahora</button>
+            </form>
+            <form action={desconectarDriveAccion}>
+              <button className="text-xs text-tenue hover:text-peligro">Desconectar</button>
+            </form>
+          </div>
+        ) : (
+          <a href="/api/google/conectar" className="flex h-10 w-fit items-center rounded-lg bg-acento px-4 text-sm font-semibold text-black hover:bg-acento-osc">
+            Conectar Google Drive
+          </a>
+        )}
+      </section>
 
       <section className="flex flex-col gap-3">
         <div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { itemsDelDataset, procesarDetalles, procesarHistorias, procesarPosts } from "@/lib/apify";
+import { subirHistoriasPendientes } from "@/lib/drive";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -22,7 +23,10 @@ export async function POST(req: Request) {
     let guardados = 0;
     if (tipo === "detalles") await procesarDetalles(items);
     else if (tipo === "posts") guardados = await procesarPosts(items);
-    else if (tipo === "historias") guardados = await procesarHistorias(items);
+    else if (tipo === "historias") {
+      guardados = await procesarHistorias(items);
+      await subirHistoriasPendientes(150_000).catch(() => undefined);
+    }
     else return NextResponse.json({ error: "Tipo desconocido" }, { status: 400 });
     revalidatePath("/", "layout");
     return NextResponse.json({ ok: true, tipo, guardados });

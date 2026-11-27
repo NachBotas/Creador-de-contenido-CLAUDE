@@ -55,4 +55,6 @@ export type Historia = {
   stickers: { tipo: string; texto?: string | null; url?: string | null }[] | null;
   texto: string | null;
   categoria: string | null;
+  drive_archivo_id: string | null;
+  drive_estado: string | null;
 };

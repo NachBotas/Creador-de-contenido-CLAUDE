@@ -30,7 +30,15 @@ export default async function Secuencia({ params }: { params: Promise<{ referent
           {historias.map((h, i) => (
             <li key={h.id} className="w-52 shrink-0">
               <div className="relative overflow-hidden rounded-xl border border-borde bg-black">
-                {h.tipo_media === "video" && h.media_url && h.media_url !== h.miniatura_url ? (
+                {h.drive_archivo_id && h.tipo_media === "video" ? (
+                  <iframe
+                    src={`https://drive.google.com/file/d/${h.drive_archivo_id}/preview`}
+                    title={`Historia ${i + 1}`}
+                    allow="autoplay"
+                    className="aspect-[9/16] w-full border-0"
+                    loading="lazy"
+                  />
+                ) : h.tipo_media === "video" && h.media_url && h.media_url !== h.miniatura_url ? (
                   <video src={h.media_url} poster={h.miniatura_url ?? undefined} controls preload="none" className="aspect-[9/16] w-full object-cover" />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -43,6 +51,14 @@ export default async function Secuencia({ params }: { params: Promise<{ referent
               <p className="mt-1.5 text-[11px] text-tenue">
                 {new Date(h.fecha_publicacion).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" })}
                 {h.tipo_media === "video" ? " · video" : " · imagen"}
+                {h.drive_archivo_id && (
+                  <>
+                    {" · "}
+                    <a href={`https://drive.google.com/file/d/${h.drive_archivo_id}/view`} target="_blank" rel="noreferrer" className="text-acento hover:underline">
+                      Drive ↗
+                    </a>
+                  </>
+                )}
               </p>
             </li>
           ))}
