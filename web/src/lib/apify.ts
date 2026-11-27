@@ -111,6 +111,30 @@ export async function iniciarSincronizacion(o: OpcionesSync): Promise<string> {
   return `Sincronizando ${partes.join(" y ")}. Tarda entre 1 y 5 minutos.`;
 }
 
+// Las publicaciones importadas desde Sort Feed llegan sin portada ni texto.
+// Esto los completa con Apify, solo para los ganadores (2x o más), que es lo que vale la pena mirar.
+export async function pendientesDePortada(): Promise<{ id: string; url: string }[]> {
+  const { data, error } = await db()
+    .from("publicaciones_con_score")
+    .select("id, url, ig_id, tipo")
+    .is("miniatura_url", null)
+    .eq("es_ganador", true)
+    .order("outlier", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { id: string; url: string | null; ig_id: string; tipo: string }[]).map((p) => ({
+    id: p.id,
+    url: p.url ?? `https://www.instagram.com/${p.tipo === "reel" ? "reel" : "p"}/${p.ig_id}/`,
+  }));
+}
+
+export async function completarPortadas(maximo = 40): Promise<string> {
+  const pendientes = (await pendientesDePortada()).slice(0, maximo);
+  if (!pendientes.length) return "No hay ganadores sin portada.";
+  await arrancar(ACTOR_POSTS, { directUrls: pendientes.map((p) => p.url), resultsType: "posts", resultsLimit: 1, addParentData: false }, "posts");
+  return `Completando portada y texto de ${pendientes.length} ganadores (~US$ ${(pendientes.length * 0.0027).toFixed(2)}). Tarda unos minutos.`;
+}
+
 export async function itemsDelDataset(datasetId: string): Promise<Record<string, unknown>[]> {
   const res = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?clean=true&format=json`, {
     headers: { Authorization: `Bearer ${tokenApify()}` },

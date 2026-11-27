@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { COOKIE_SESION, contrasenaCorrecta, crearTokenSesion, sesionValida } from "@/lib/auth";
 import { db } from "@/lib/supabase";
-import { guardarSyncDiaria, iniciarSincronizacion, SYNC_PRIMERA_VEZ } from "@/lib/apify";
+import { completarPortadas, guardarSyncDiaria, iniciarSincronizacion, SYNC_PRIMERA_VEZ } from "@/lib/apify";
 
 async function exigirSesion() {
   const c = await cookies();
@@ -95,6 +95,16 @@ export async function sincronizar(form: FormData) {
   const id = String(form.get("id") ?? "") || undefined;
   try {
     volver("/referentes", await iniciarSincronizacion({ ...leerOpciones(form), referenteId: id }));
+  } catch (e) {
+    if ((e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw e;
+    volver("/referentes", (e as Error).message, true);
+  }
+}
+
+export async function completarPortadasAccion() {
+  await exigirSesion();
+  try {
+    volver("/referentes", await completarPortadas(60));
   } catch (e) {
     if ((e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw e;
     volver("/referentes", (e as Error).message, true);

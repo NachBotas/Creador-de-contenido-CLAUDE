@@ -1,5 +1,5 @@
-import { agregarFormato, agregarReferente, guardarAjusteSync, sincronizar } from "@/app/acciones";
-import { leerSyncDiaria } from "@/lib/apify";
+import { agregarFormato, agregarReferente, completarPortadasAccion, guardarAjusteSync, sincronizar } from "@/app/acciones";
+import { leerSyncDiaria, pendientesDePortada } from "@/lib/apify";
 import FormSync from "@/components/FormSync";
 import { conteosPorReferente, listarFormatos, listarReferentes } from "@/lib/datos";
 import { fechaHora, numero } from "@/lib/formato";
@@ -11,7 +11,7 @@ export const metadata = { title: "Referentes · Radar de contenido" };
 
 export default async function Referentes({ searchParams }: { searchParams: Promise<{ msg?: string; error?: string; sync?: string }> }) {
   const { msg, error, sync } = await searchParams;
-  const [referentes, formatos, conteos, diaria] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente(), leerSyncDiaria()]);
+  const [referentes, formatos, conteos, diaria, sinPortada] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente(), leerSyncDiaria(), pendientesDePortada()]);
   const refsSync = referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo }));
 
   return (
@@ -75,6 +75,16 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
             );
           })}
         </ul>
+      )}
+
+      {sinPortada.length > 0 && (
+        <form action={completarPortadasAccion} className="flex flex-wrap items-center gap-3 rounded-xl border border-ganador/40 bg-ganador/10 p-4">
+          <p className="min-w-0 flex-1 text-sm">
+            <strong>{sinPortada.length} ganadores sin portada ni texto</strong> (importados desde Sort Feed). Se completan solos cada mañana, de a 40.
+            <span className="block text-xs text-suave">Ahora: hasta 60 por vez, ~US$ {(Math.min(sinPortada.length, 60) * 0.0027).toFixed(2)} de Apify.</span>
+          </p>
+          <button className="h-9 rounded-lg bg-acento px-4 text-sm font-semibold text-black hover:bg-acento-osc">Completar ahora</button>
+        </form>
       )}
 
       {referentes.length > 0 && (

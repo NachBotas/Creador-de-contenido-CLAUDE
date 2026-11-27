@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { iniciarSincronizacion, leerSyncDiaria } from "@/lib/apify";
+import { completarPortadas, iniciarSincronizacion, leerSyncDiaria } from "@/lib/apify";
 import { instagramConfigurado, sincronizarTodasLasCuentas } from "@/lib/instagram";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +16,11 @@ export async function GET(req: Request) {
     resultado.referentes = await iniciarSincronizacion(await leerSyncDiaria());
   } catch (e) {
     resultado.errorReferentes = (e as Error).message;
+  }
+  try {
+    resultado.portadas = await completarPortadas(40);
+  } catch (e) {
+    resultado.errorPortadas = (e as Error).message;
   }
   if (instagramConfigurado()) resultado.cuentasActualizadas = await sincronizarTodasLasCuentas();
   return NextResponse.json({ ok: !resultado.errorReferentes, ...resultado });

@@ -29,7 +29,11 @@ export default function Tarjeta({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={p.miniatura_url} alt="" loading="lazy" className="size-full object-cover transition group-hover:opacity-90" />
           ) : (
-            <div className="grid size-full place-items-center text-xs text-tenue">Sin imagen</div>
+            <div className="flex size-full flex-col items-center justify-center gap-1 bg-gradient-to-b from-panel-2 to-fondo px-3 text-center">
+              <span className="text-2xl font-semibold tabular-nums text-texto">{numero(esReel ? p.vistas : p.likes)}</span>
+              <span className="text-[11px] text-tenue">{esReel ? "reproducciones" : "me gusta"}</span>
+              <span className="mt-2 text-[10px] text-tenue">Portada pendiente · tocá para verlo</span>
+            </div>
           )}
         </div>
         <span className="absolute left-2 top-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
