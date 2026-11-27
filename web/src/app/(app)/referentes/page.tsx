@@ -96,7 +96,7 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
           <section className="flex flex-col gap-3 rounded-xl border border-borde bg-panel p-5">
             <div>
               <h2 className="font-medium">Sincronización automática</h2>
-              <p className="text-sm text-suave">Corre sola todos los días a las 6 de la mañana, para las cuentas con el interruptor encendido.</p>
+              <p className="text-sm text-suave">Corre sola todos los días a las 6 de la mañana. Elegí qué traer y de qué cuentas.</p>
             </div>
             <FormSync accion={guardarAjusteSync} referentes={refsSync} modo="diaria" inicial={diaria} />
           </section>

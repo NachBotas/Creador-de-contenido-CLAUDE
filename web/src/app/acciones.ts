@@ -103,7 +103,19 @@ export async function sincronizar(form: FormData) {
 
 export async function guardarAjusteSync(form: FormData) {
   await exigirSesion();
-  await guardarSyncDiaria(leerOpciones(form));
+  const opciones = leerOpciones(form);
+  await guardarSyncDiaria(opciones);
+  // Las casillas de cuentas del panel prenden o apagan los interruptores de cada referente.
+  const { data } = await db().from("referentes").select("id");
+  const todos = ((data ?? []) as { id: string }[]).map((r) => r.id);
+  const aplicar = async (campo: "historias_activo" | "contenido_activo", elegidos: string[]) => {
+    const si = todos.filter((id) => elegidos.includes(id));
+    const no = todos.filter((id) => !elegidos.includes(id));
+    if (si.length) await db().from("referentes").update({ [campo]: true }).in("id", si);
+    if (no.length) await db().from("referentes").update({ [campo]: false }).in("id", no);
+  };
+  if (opciones.historias) await aplicar("historias_activo", form.getAll("hist_ids").map(String));
+  if (opciones.feed) await aplicar("contenido_activo", form.getAll("feed_ids").map(String));
   revalidatePath("/referentes");
   volver("/referentes", "Sincronización automática guardada.");
 }

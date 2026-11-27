@@ -38,9 +38,17 @@ export default function FormSync({
   const [maximo, setMaximo] = useState(inicial.maximo);
   const [cuenta, setCuenta] = useState(cuentaInicial);
   const [enviando, setEnviando] = useState(false);
+  const [idsFeed, setIdsFeed] = useState(() => new Set(referentes.filter((r) => r.contenido).map((r) => r.id)));
+  const [idsHist, setIdsHist] = useState(() => new Set(referentes.filter((r) => r.historias).map((r) => r.id)));
+  const alternar = (set: Set<string>, fijar: (s: Set<string>) => void, id: string) => {
+    const n = new Set(set);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    fijar(n);
+  };
 
-  const nFeed = cuenta ? 1 : referentes.filter((r) => r.contenido).length;
-  const nHist = cuenta ? 1 : referentes.filter((r) => r.historias).length;
+  const nFeed = cuenta ? 1 : idsFeed.size;
+  const nHist = cuenta ? 1 : idsHist.size;
   const costoFeed = feed ? nFeed * (maximo * PRECIO_POST + PRECIO_PERFIL) : 0;
   const costoHist = historias ? nHist * HISTORIAS_X_CUENTA * PRECIO_HISTORIA : 0;
   const total = costoFeed + costoHist;
@@ -69,6 +77,9 @@ export default function FormSync({
           <input type="checkbox" name="feed" value="1" checked={feed} onChange={(e) => setFeed(e.target.checked)} className="size-4 accent-[var(--color-acento)]" />
           Feed: reels y carruseles
         </label>
+        {feed && modo === "diaria" && (
+          <Cuentas nombre="feed_ids" referentes={referentes} elegidas={idsFeed} alternar={(id) => alternar(idsFeed, setIdsFeed, id)} />
+        )}
         {feed && (
           <div className="ml-6 flex flex-wrap gap-2">
             <label className="flex flex-col gap-1 text-xs text-suave">
@@ -97,6 +108,9 @@ export default function FormSync({
           <input type="checkbox" name="historias" value="1" checked={historias} onChange={(e) => setHistorias(e.target.checked)} className="size-4 accent-[var(--color-acento)]" />
           Historias (las activas de las últimas 24 h)
         </label>
+        {historias && modo === "diaria" && (
+          <Cuentas nombre="hist_ids" referentes={referentes} elegidas={idsHist} alternar={(id) => alternar(idsHist, setIdsHist, id)} />
+        )}
       </fieldset>
 
       <div className="rounded-lg bg-panel-2 px-3 py-2.5 text-xs text-suave">
@@ -120,5 +134,29 @@ export default function FormSync({
         {enviando ? "Un momento…" : modo === "ahora" ? "Sincronizar ahora" : "Guardar sincronización automática"}
       </button>
     </form>
+  );
+}
+
+function Cuentas({ nombre, referentes, elegidas, alternar }: { nombre: string; referentes: Ref[]; elegidas: Set<string>; alternar: (id: string) => void }) {
+  return (
+    <div className="ml-6 flex flex-col gap-1.5 rounded-lg border border-borde bg-fondo p-3">
+      <p className="text-xs text-suave">
+        De qué cuentas · {elegidas.size} de {referentes.length}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {referentes.map((r) => {
+          const on = elegidas.has(r.id);
+          return (
+            <label
+              key={r.id}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${on ? "border-acento/50 bg-acento/10 text-texto" : "border-borde text-tenue"}`}
+            >
+              <input type="checkbox" name={nombre} value={r.id} checked={on} onChange={() => alternar(r.id)} className="sr-only" />
+              <span aria-hidden="true" className={`size-1.5 rounded-full ${on ? "bg-acento" : "bg-tenue"}`} />@{r.usuario}
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }
