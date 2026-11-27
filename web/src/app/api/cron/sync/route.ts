@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { iniciarSincronizacion } from "@/lib/apify";
+import { iniciarSincronizacion, leerSyncDiaria } from "@/lib/apify";
 import { instagramConfigurado, sincronizarTodasLasCuentas } from "@/lib/instagram";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   }
   const resultado: Record<string, unknown> = {};
   try {
-    resultado.referentes = await iniciarSincronizacion();
+    resultado.referentes = await iniciarSincronizacion(await leerSyncDiaria());
   } catch (e) {
     resultado.errorReferentes = (e as Error).message;
   }

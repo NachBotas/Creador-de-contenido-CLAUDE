@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { COOKIE_SESION, contrasenaCorrecta, crearTokenSesion, sesionValida } from "@/lib/auth";
 import { db } from "@/lib/supabase";
-import { iniciarSincronizacion } from "@/lib/apify";
+import { guardarSyncDiaria, iniciarSincronizacion, SYNC_PRIMERA_VEZ } from "@/lib/apify";
 
 async function exigirSesion() {
   const c = await cookies();
@@ -57,7 +57,7 @@ export async function agregarReferente(form: FormData) {
   if (error) volver("/referentes", error.message, true);
   let msg = `@${usuario} agregado.`;
   try {
-    msg += " " + (await iniciarSincronizacion(data!.id));
+    msg += " " + (await iniciarSincronizacion({ ...SYNC_PRIMERA_VEZ, referenteId: data!.id }));
   } catch (e) {
     msg += ` No se pudo sincronizar todavía: ${(e as Error).message}`;
   }
@@ -77,15 +77,35 @@ export async function eliminarReferente(id: string) {
   revalidatePath("/", "layout");
 }
 
+function leerOpciones(form: FormData) {
+  const num = (k: string, def: number) => {
+    const v = Number(form.get(k));
+    return Number.isFinite(v) && v >= 0 ? v : def;
+  };
+  return {
+    feed: form.get("feed") === "1",
+    historias: form.get("historias") === "1",
+    dias: num("dias", 7),
+    maximo: num("maximo", 8) || 8,
+  };
+}
+
 export async function sincronizar(form: FormData) {
   await exigirSesion();
   const id = String(form.get("id") ?? "") || undefined;
   try {
-    volver("/referentes", await iniciarSincronizacion(id));
+    volver("/referentes", await iniciarSincronizacion({ ...leerOpciones(form), referenteId: id }));
   } catch (e) {
     if ((e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw e;
     volver("/referentes", (e as Error).message, true);
   }
+}
+
+export async function guardarAjusteSync(form: FormData) {
+  await exigirSesion();
+  await guardarSyncDiaria(leerOpciones(form));
+  revalidatePath("/referentes");
+  volver("/referentes", "Sincronización automática guardada.");
 }
 
 // ---------- Formatos ----------

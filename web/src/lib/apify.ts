@@ -44,28 +44,71 @@ async function arrancar(actor: string, input: unknown, tipo: TipoCorrida) {
   await apify(`/acts/${actor}/runs?webhooks=${encodeURIComponent(webhooks)}`, { method: "POST", body: JSON.stringify(input) });
 }
 
-export async function iniciarSincronizacion(soloReferenteId?: string): Promise<string> {
+export type OpcionesSync = {
+  referenteId?: string; // vacío = todas las cuentas
+  feed: boolean; // reels y carruseles
+  historias: boolean;
+  dias: number; // cuánto hacia atrás en el feed (0 = sin límite)
+  maximo: number; // tope de publicaciones por cuenta
+};
+
+export const SYNC_DIARIA_DEFECTO: Omit<OpcionesSync, "referenteId"> = { feed: true, historias: true, dias: 7, maximo: 8 };
+export const SYNC_PRIMERA_VEZ: Omit<OpcionesSync, "referenteId"> = { feed: true, historias: true, dias: 30, maximo: 30 };
+
+export async function leerSyncDiaria(): Promise<Omit<OpcionesSync, "referenteId">> {
+  const { data } = await db().from("ajustes").select("valor").eq("clave", "sync_diaria").maybeSingle();
+  return { ...SYNC_DIARIA_DEFECTO, ...((data?.valor as object) ?? {}) };
+}
+
+export async function guardarSyncDiaria(o: Omit<OpcionesSync, "referenteId">) {
+  const { error } = await db().from("ajustes").upsert({ clave: "sync_diaria", valor: o, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
+}
+
+export async function iniciarSincronizacion(o: OpcionesSync): Promise<string> {
+  if (!o.feed && !o.historias) return "Elegí al menos feed o historias.";
   let q = db().from("referentes").select("id, ig_username, contenido_activo, historias_activo");
-  if (soloReferenteId) q = q.eq("id", soloReferenteId);
+  if (o.referenteId) q = q.eq("id", o.referenteId);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   const refs = (data ?? []) as { ig_username: string; contenido_activo: boolean; historias_activo: boolean }[];
   if (!refs.length) return "No hay referentes para sincronizar.";
 
-  const conContenido = refs.filter((r) => r.contenido_activo).map((r) => `https://www.instagram.com/${r.ig_username}/`);
-  const conHistorias = refs.filter((r) => r.historias_activo).map((r) => r.ig_username);
-  const limite = Number(process.env.POSTS_POR_CUENTA) || 30;
+  // Con una sola cuenta elegida, se respeta lo pedido aunque tenga el interruptor apagado.
+  const una = Boolean(o.referenteId);
+  const conFeed = o.feed ? refs.filter((r) => una || r.contenido_activo) : [];
+  const conHistorias = o.historias ? refs.filter((r) => una || r.historias_activo) : [];
+  const url = (u: string) => `https://www.instagram.com/${u}/`;
+  const maximo = Math.min(Math.max(Math.round(o.maximo) || 8, 1), 200);
 
-  const tareas: Promise<unknown>[] = [
-    arrancar(ACTOR_POSTS, { directUrls: refs.map((r) => `https://www.instagram.com/${r.ig_username}/`), resultsType: "details", resultsLimit: 1 }, "detalles"),
-  ];
-  if (conContenido.length)
-    tareas.push(arrancar(ACTOR_POSTS, { directUrls: conContenido, resultsType: "posts", resultsLimit: limite, addParentData: false }, "posts"));
-  if (conHistorias.length)
-    tareas.push(arrancar(ACTOR_HISTORIAS, { usernames: conHistorias, includeStories: true, includeHighlights: false }, "historias"));
+  const tareas: Promise<unknown>[] = [];
+  if (conFeed.length) {
+    tareas.push(arrancar(ACTOR_POSTS, { directUrls: conFeed.map((r) => url(r.ig_username)), resultsType: "details", resultsLimit: 1 }, "detalles"));
+    tareas.push(
+      arrancar(
+        ACTOR_POSTS,
+        {
+          directUrls: conFeed.map((r) => url(r.ig_username)),
+          resultsType: "posts",
+          resultsLimit: maximo,
+          addParentData: false,
+          ...(o.dias > 0 ? { onlyPostsNewerThan: `${Math.round(o.dias)} days` } : {}),
+        },
+        "posts",
+      ),
+    );
+  }
+  if (conHistorias.length) {
+    tareas.push(arrancar(ACTOR_HISTORIAS, { usernames: conHistorias.map((r) => r.ig_username), includeStories: true, includeHighlights: false }, "historias"));
+  }
+  if (!tareas.length) return "Ninguna cuenta tiene activado lo que elegiste.";
   await Promise.all(tareas);
 
-  return `Sincronización en marcha para ${refs.length} ${refs.length === 1 ? "cuenta" : "cuentas"}. Tarda entre 1 y 5 minutos.`;
+  const partes = [
+    conFeed.length && `feed de ${conFeed.length} ${conFeed.length === 1 ? "cuenta" : "cuentas"} (${o.dias > 0 ? `últimos ${o.dias} días, ` : ""}hasta ${maximo} c/u)`,
+    conHistorias.length && `historias de ${conHistorias.length} ${conHistorias.length === 1 ? "cuenta" : "cuentas"}`,
+  ].filter(Boolean);
+  return `Sincronizando ${partes.join(" y ")}. Tarda entre 1 y 5 minutos.`;
 }
 
 export async function itemsDelDataset(datasetId: string): Promise<Record<string, unknown>[]> {

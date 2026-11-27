@@ -1,4 +1,6 @@
-import { agregarFormato, agregarReferente, sincronizar } from "@/app/acciones";
+import { agregarFormato, agregarReferente, guardarAjusteSync, sincronizar } from "@/app/acciones";
+import { leerSyncDiaria } from "@/lib/apify";
+import FormSync from "@/components/FormSync";
 import { conteosPorReferente, listarFormatos, listarReferentes } from "@/lib/datos";
 import { fechaHora, numero } from "@/lib/formato";
 import Encabezado, { Aviso, Vacio } from "@/components/Encabezado";
@@ -7,17 +9,18 @@ import { BotonEliminar, BotonEliminarFormato, Interruptor } from "@/components/C
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Referentes · Radar de contenido" };
 
-export default async function Referentes({ searchParams }: { searchParams: Promise<{ msg?: string; error?: string }> }) {
-  const { msg, error } = await searchParams;
-  const [referentes, formatos, conteos] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente()]);
+export default async function Referentes({ searchParams }: { searchParams: Promise<{ msg?: string; error?: string; sync?: string }> }) {
+  const { msg, error, sync } = await searchParams;
+  const [referentes, formatos, conteos, diaria] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente(), leerSyncDiaria()]);
+  const refsSync = referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo }));
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <Encabezado titulo="Referentes" bajada="Las cuentas que seguís. Se actualizan solas una vez por día.">
         {referentes.length > 0 && (
-          <form action={sincronizar}>
-            <button className="h-9 rounded-lg border border-borde px-3 text-sm hover:bg-panel">Sincronizar todo ahora</button>
-          </form>
+          <a href="#sincronizar" className="flex h-9 items-center rounded-lg border border-borde px-3 text-sm hover:bg-panel">
+            Sincronizar…
+          </a>
         )}
       </Encabezado>
 
@@ -63,16 +66,41 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
                 <div className="flex flex-wrap items-center gap-2">
                   <Interruptor id={r.id} campo="contenido_activo" valor={r.contenido_activo} texto="Contenido" />
                   <Interruptor id={r.id} campo="historias_activo" valor={r.historias_activo} texto="Historias" />
-                  <form action={sincronizar}>
-                    <input type="hidden" name="id" value={r.id} />
-                    <button className="rounded-md px-2 py-1 text-xs text-suave hover:bg-panel-2 hover:text-texto">Sincronizar</button>
-                  </form>
+                  <a href={`?sync=${r.id}#sincronizar`} className="rounded-md px-2 py-1 text-xs text-suave hover:bg-panel-2 hover:text-texto">
+                    Sincronizar
+                  </a>
                   <BotonEliminar id={r.id} usuario={r.ig_username} />
                 </div>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {referentes.length > 0 && (
+        <div id="sincronizar" className="grid scroll-mt-6 gap-4 lg:grid-cols-2">
+          <section className="flex flex-col gap-3 rounded-xl border border-borde bg-panel p-5">
+            <div>
+              <h2 className="font-medium">Sincronizar ahora</h2>
+              <p className="text-sm text-suave">Elegí qué traer, de qué cuentas y cuánto hacia atrás.</p>
+            </div>
+            <FormSync
+              key={sync ?? "todas"}
+              accion={sincronizar}
+              referentes={refsSync}
+              modo="ahora"
+              inicial={{ feed: true, historias: true, dias: 30, maximo: 30 }}
+              cuentaInicial={referentes.some((r) => r.id === sync) ? sync : ""}
+            />
+          </section>
+          <section className="flex flex-col gap-3 rounded-xl border border-borde bg-panel p-5">
+            <div>
+              <h2 className="font-medium">Sincronización automática</h2>
+              <p className="text-sm text-suave">Corre sola todos los días a las 6 de la mañana, para las cuentas con el interruptor encendido.</p>
+            </div>
+            <FormSync accion={guardarAjusteSync} referentes={refsSync} modo="diaria" inicial={diaria} />
+          </section>
+        </div>
       )}
 
       <section className="flex flex-col gap-3">
