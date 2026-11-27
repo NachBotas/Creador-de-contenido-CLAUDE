@@ -1,16 +1,12 @@
-import VistaPublicaciones from "@/components/VistaPublicaciones";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Reels · Radar de contenido" };
 
-export default async function Reels({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  return (
-    <VistaPublicaciones
-      sp={await searchParams}
-      tipo="reel"
-      titulo="Reels"
-      bajada="Separados por formato. Asigná el formato de cada reel desde su tarjeta."
-      porFormato
-    />
-  );
+// Ahora todo está en la pantalla Contenido.
+export default async function Redireccion({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) if (typeof v === "string" && v) p.set(k, v);
+  p.set("t", "reel");
+  redirect(`/?${p}`);
 }

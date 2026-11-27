@@ -5,10 +5,7 @@ import { usePathname } from "next/navigation";
 import { salir } from "@/app/acciones";
 
 const ITEMS = [
-  { href: "/", etiqueta: "Feed viral", detalle: "Lo mejor de todos", icono: "M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-6 1-9Z" },
-  { href: "/reels", etiqueta: "Reels", detalle: "Por formato", icono: "M4 4h16v16H4zM10 9l5 3-5 3z" },
-  { href: "/carruseles", etiqueta: "Carruseles", detalle: "Slides y portadas", icono: "M3 6h13v13H3zM19 8v12H7" },
-  { href: "/historias", etiqueta: "Historias", detalle: "Secuencias por día", icono: "M12 3a9 9 0 1 0 9 9M12 3a9 9 0 0 1 9 9M12 7v5l3 2" },
+  { href: "/", etiqueta: "Contenido", detalle: "Reels, carruseles e historias", icono: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" },
   { href: "/ideas", etiqueta: "Banco de ideas", detalle: "Lo que guardaste", icono: "M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2Z" },
   { href: "/clientes", etiqueta: "Clientes", detalle: "De dónde vino cada uno", icono: "M3 12h4l3 8 4-16 3 8h4" },
   { href: "/negocios", etiqueta: "Negocios", detalle: "Tus cuentas y ManyChat", icono: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" },
@@ -17,7 +14,8 @@ const ITEMS = [
 ];
 
 function activo(ruta: string, href: string) {
-  return href === "/" ? ruta === "/" : ruta.startsWith(href) || (href === "/historias" && ruta.startsWith("/historias"));
+  if (href === "/") return ruta === "/" || ruta.startsWith("/historias") || ruta.startsWith("/p/");
+  return ruta.startsWith(href);
 }
 
 export default function Navegacion() {

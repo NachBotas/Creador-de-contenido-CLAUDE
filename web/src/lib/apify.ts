@@ -243,8 +243,14 @@ export async function procesarHistorias(items: Record<string, unknown>[]) {
   }
   if (!filas.length) return 0;
 
-  const { data: existentes } = await db().from("historias").select("ig_id").in("ig_id", filas.map((f) => String((f.s as Record<string, unknown>).id)));
-  const ya = new Set(((existentes ?? []) as { ig_id: string }[]).map((e) => e.ig_id));
+  // Ya guardadas con su imagen en nuestro almacenamiento: no se vuelven a procesar.
+  const { data: existentes } = await db()
+    .from("historias")
+    .select("ig_id, miniatura_url")
+    .in("ig_id", filas.map((f) => String((f.s as Record<string, unknown>).id)));
+  const ya = new Set(
+    ((existentes ?? []) as { ig_id: string; miniatura_url: string | null }[]).filter((e) => e.miniatura_url?.includes("supabase")).map((e) => e.ig_id),
+  );
   const nuevas = filas.filter((f) => !ya.has(String((f.s as Record<string, unknown>).id)));
 
   const aGuardar: Record<string, unknown>[] = [];

@@ -221,3 +221,11 @@ export async function listarIdeas(): Promise<Publicacion[]> {
   const porId = new Map(((data ?? []) as Publicacion[]).map((p) => [p.id, p]));
   return ids.map((id) => porId.get(id)).filter((p): p is Publicacion => Boolean(p));
 }
+
+export async function contarHistorias(dias: number, referente: string): Promise<number> {
+  let q = db().from("historias").select("id", { count: "exact", head: true });
+  if (dias > 0) q = q.gte("fecha_publicacion", new Date(Date.now() - dias * 86_400_000).toISOString());
+  if (referente) q = q.eq("referente_id", referente);
+  const { count } = await q;
+  return count ?? 0;
+}

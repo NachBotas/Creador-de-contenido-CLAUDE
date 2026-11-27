@@ -14,7 +14,7 @@ export default async function Detalle({ params }: { params: Promise<{ id: string
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
-      <Link href={p.tipo === "reel" ? "/reels" : "/carruseles"} className="text-sm text-suave hover:text-texto">
+      <Link href={`/?t=${p.tipo === "reel" ? "reel" : "carrusel"}`} className="text-sm text-suave hover:text-texto">
         ← Volver
       </Link>
       <div className="rounded-2xl border border-borde bg-panel p-4 sm:p-6">

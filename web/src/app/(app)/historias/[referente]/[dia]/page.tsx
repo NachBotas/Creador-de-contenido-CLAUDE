@@ -14,7 +14,7 @@ export default async function Secuencia({ params }: { params: Promise<{ referent
 
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
-      <Link href="/historias" className="text-sm text-suave hover:text-texto">
+      <Link href={`/?t=historias&referente=${referente}`} className="text-sm text-suave hover:text-texto">
         ← Volver a historias
       </Link>
       <h1 className="text-xl font-semibold tracking-tight">

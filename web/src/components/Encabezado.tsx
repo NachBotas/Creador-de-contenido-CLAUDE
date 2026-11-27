@@ -1,10 +1,12 @@
 export default function Encabezado({ titulo, bajada, children }: { titulo: string; bajada: string; children?: React.ReactNode }) {
   return (
     <header className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{titulo}</h1>
-        <p className="mt-1 text-sm text-suave">{bajada}</p>
-      </div>
+      {titulo ? (
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{titulo}</h1>
+          {bajada && <p className="mt-1 text-sm text-suave">{bajada}</p>}
+        </div>
+      ) : null}
       {children}
     </header>
   );

@@ -2,13 +2,13 @@ import VistaPublicaciones from "@/components/VistaPublicaciones";
 
 export const dynamic = "force-dynamic";
 
-export default async function FeedViral({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default async function Contenido({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   return (
     <VistaPublicaciones
       sp={await searchParams}
       tipo="todos"
-      titulo="Feed viral"
-      bajada="Lo que mejor funcionó entre todos tus referentes, ordenado por outlier."
+      titulo="Contenido"
+      bajada="Elegí un perfil o mirá todos juntos, ordenado por lo que mejor funcionó."
       porFormato={false}
     />
   );
