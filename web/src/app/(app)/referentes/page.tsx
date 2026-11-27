@@ -1,4 +1,4 @@
-import { agregarFormato, agregarReferente, completarPortadasAccion, guardarAjusteSync, sincronizar } from "@/app/acciones";
+import { agregarFormato, agregarReferente, completarPortadasAccion, importarSortFeedAccion, guardarAjusteSync, sincronizar } from "@/app/acciones";
 import { leerSyncDiaria, pendientesDePortada } from "@/lib/apify";
 import FormSync from "@/components/FormSync";
 import { conteosPorReferente, listarFormatos, listarReferentes } from "@/lib/datos";
@@ -76,6 +76,26 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
           })}
         </ul>
       )}
+
+      <form action={importarSortFeedAccion} className="flex flex-col gap-3 rounded-xl border border-borde bg-panel p-5">
+        <div>
+          <h2 className="font-medium">Importar desde Sort Feed</h2>
+          <p className="text-sm text-suave">
+            En la extensión: ordená un perfil → <strong>Export</strong> (CSV o Excel). Para traer transcripciones y hooks: <strong>Select</strong> → elegí hasta 25 →{" "}
+            <strong>Export + Transcripts</strong>. Después subí el archivo acá. Si el perfil no está en tus referentes, se agrega solo.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="file"
+            name="archivo"
+            required
+            accept=".csv,.xlsx"
+            className="min-w-0 flex-1 basis-64 text-sm text-suave file:mr-3 file:h-9 file:rounded-md file:border file:border-borde file:bg-fondo file:px-3 file:text-sm file:text-texto"
+          />
+          <button className="h-10 rounded-md bg-acento px-4 text-sm font-semibold text-black hover:bg-acento-osc">Importar</button>
+        </div>
+      </form>
 
       {sinPortada.length > 0 && (
         <form action={completarPortadasAccion} className="flex flex-wrap items-center gap-3 rounded-xl border border-ganador/40 bg-ganador/10 p-4">

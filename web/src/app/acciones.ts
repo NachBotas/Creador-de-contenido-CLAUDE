@@ -101,6 +101,21 @@ export async function sincronizar(form: FormData) {
   }
 }
 
+export async function importarSortFeedAccion(form: FormData) {
+  await exigirSesion();
+  const archivo = form.get("archivo");
+  if (!(archivo instanceof File) || !archivo.size) volver("/referentes", "Elegí el archivo que exportaste de Sort Feed.", true);
+  const { importarSortFeed } = await import("@/lib/sortfeed");
+  let msg = "";
+  try {
+    msg = await importarSortFeed(archivo as File);
+  } catch (e) {
+    volver("/referentes", (e as Error).message, true);
+  }
+  revalidatePath("/", "layout");
+  volver("/referentes", msg);
+}
+
 export async function completarPortadasAccion() {
   await exigirSesion();
   try {
