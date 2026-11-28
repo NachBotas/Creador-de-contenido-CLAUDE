@@ -46,25 +46,41 @@ async function achicar(bytes: Uint8Array): Promise<{ datos: Uint8Array; tipo: st
   }
 }
 
-// Guarda una imagen y devuelve su URL pública.
+// Sube bytes a R2 (con tamaño explícito: R2 lo exige) y devuelve la URL pública.
+async function subirR2(ruta: string, datos: Uint8Array, tipo: string): Promise<string | null> {
+  const url = `${process.env.R2_ENDPOINT!.replace(/\/$/, "")}/${R2_BUCKET}/${ruta}`;
+  const cuerpo = datos.buffer.slice(datos.byteOffset, datos.byteOffset + datos.byteLength) as ArrayBuffer;
+  const res = await r2().fetch(url, {
+    method: "PUT",
+    body: cuerpo,
+    headers: { "Content-Type": tipo, "Content-Length": String(datos.byteLength), "Cache-Control": "public, max-age=31536000, immutable" },
+  });
+  if (!res.ok) {
+    console.error(`[r2] PUT ${ruta} falló: ${res.status} ${(await res.text()).slice(0, 200)}`);
+    return null;
+  }
+  return `${baseR2()}/${ruta}`;
+}
+
+// Guarda una imagen (achicada) y devuelve su URL pública.
 export async function guardarImagen(ruta: string, original: Uint8Array): Promise<string | null> {
   const { datos, tipo } = await achicar(original);
-  if (r2Configurado()) {
-    const url = `${process.env.R2_ENDPOINT!.replace(/\/$/, "")}/${R2_BUCKET}/${ruta}`;
-    const res = await r2().fetch(url, {
-      method: "PUT",
-      body: new Blob([datos as BlobPart], { type: tipo }),
-      headers: { "Content-Type": tipo, "Cache-Control": "public, max-age=31536000, immutable" },
-    });
-    if (!res.ok) {
-      console.error(`[r2] PUT ${ruta} falló: ${res.status} ${(await res.text()).slice(0, 200)}`);
-      return null;
-    }
-    return `${baseR2()}/${ruta}`;
-  }
+  if (r2Configurado()) return subirR2(ruta, datos, tipo);
   const { error } = await db().storage.from(BUCKET).upload(ruta, datos, { contentType: tipo, upsert: true });
   if (error) return null;
   return db().storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl;
+}
+
+// Baja un video y lo guarda tal cual en R2 (solo si R2 está configurado).
+export async function copiarVideo(url: string | undefined | null, ruta: string): Promise<string | null> {
+  if (!url || !r2Configurado()) return null;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await subirR2(ruta, new Uint8Array(await res.arrayBuffer()), "video/mp4");
+  } catch {
+    return null;
+  }
 }
 
 // Baja una imagen de internet y la guarda (achicada).

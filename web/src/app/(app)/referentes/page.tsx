@@ -1,6 +1,3 @@
-import { mudarImagenesAccion } from "@/app/acciones";
-import { r2Configurado } from "@/lib/almacen";
-import { db } from "@/lib/supabase";
 import { agregarFormato, agregarReferente, completarPortadasAccion, guardarAjusteSync, sincronizar } from "@/app/acciones";
 import { leerSyncDiaria, pendientesDePortada } from "@/lib/apify";
 import FormSync from "@/components/FormSync";
@@ -16,17 +13,6 @@ export const metadata = { title: "Referentes · Radar de contenido" };
 export default async function Referentes({ searchParams }: { searchParams: Promise<{ msg?: string; error?: string; sync?: string }> }) {
   const { msg, error, sync } = await searchParams;
   const [referentes, formatos, conteos, diaria, sinPortada] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente(), leerSyncDiaria(), pendientesDePortada()]);
-  const pendientesR2 = r2Configurado()
-    ? (
-        await Promise.all(
-          [
-            ["publicaciones", "miniatura_url"],
-            ["historias", "miniatura_url"],
-            ["referentes", "foto_url"],
-          ].map(([t, c]) => db().from(t).select("id", { count: "exact", head: true }).like(c, "%supabase.co/storage%")),
-        )
-      ).reduce((s, r) => s + (r.count ?? 0), 0)
-    : 0;
   const refsSync = referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo }));
 
   return (
@@ -90,16 +76,6 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
             );
           })}
         </ul>
-      )}
-
-      {r2Configurado() && pendientesR2 > 0 && (
-        <form action={mudarImagenesAccion} className="flex flex-wrap items-center gap-3 rounded-xl border border-borde bg-panel p-4">
-          <p className="min-w-0 flex-1 text-sm">
-            <strong>Mudanza a Cloudflare: faltan {pendientesR2} imágenes.</strong>{" "}
-            <span className="text-suave">Las nuevas ya se guardan ahí. Las viejas se mudan solas cada mañana, o ahora con el botón.</span>
-          </p>
-          <button className="h-9 rounded-lg border border-borde px-3 text-sm hover:bg-panel-2">Mudar ahora</button>
-        </form>
       )}
 
       {sinPortada.length > 0 && (

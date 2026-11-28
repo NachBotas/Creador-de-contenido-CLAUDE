@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./supabase";
-import { copiarImagen, esPropia } from "./almacen";
+import { copiarImagen, copiarVideo, esPropia } from "./almacen";
 import { detectarCta, detectarPalabraClave } from "./cta";
 
 // Scrapers de Apify que usamos (probados).
@@ -266,13 +266,15 @@ export async function procesarHistorias(items: Record<string, unknown>[]) {
     const h = s as Record<string, unknown>;
     const id = String(h.id);
     const imagen = await copiarImagen(h.imageUrl as string, `historias/${id}.jpg`);
+    // Los videos de historias también se guardan completos (en Instagram el link vence a los pocos días).
+    const video = h.mediaType === "video" ? await copiarVideo(h.videoUrl as string, `historias/${id}.mp4`) : null;
     aGuardar.push({
       referente_id: referenteId,
       ig_id: id,
       fecha_publicacion: new Date(Number(h.takenAt) * 1000).toISOString(),
       tipo_media: h.mediaType === "video" ? "video" : "imagen",
       miniatura_url: imagen ?? (h.imageUrl as string) ?? null,
-      media_url: (h.videoUrl as string) ?? imagen ?? null,
+      media_url: video ?? (h.videoUrl as string) ?? imagen ?? null,
       duracion_seg: typeof h.videoDuration === "number" ? Math.round(h.videoDuration) : null,
     });
   });
