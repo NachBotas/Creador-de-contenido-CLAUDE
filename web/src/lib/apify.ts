@@ -7,7 +7,7 @@ import { detectarCta, detectarPalabraClave } from "./cta";
 export const ACTOR_POSTS = "apify~instagram-scraper";
 export const ACTOR_HISTORIAS = "goat255~instagram-stories-highlights-scraper";
 
-export type TipoCorrida = "detalles" | "posts" | "historias";
+export type TipoCorrida = "detalles" | "posts" | "historias" | "transcripciones";
 
 function tokenApify(): string {
   const t = process.env.APIFY_TOKEN;
@@ -112,11 +112,21 @@ export type OpcionesSync = {
   feed: boolean; // reels y carruseles
   historias: boolean;
   dias: number; // cuánto hacia atrás en el feed (0 = sin límite)
-  maximo: number; // tope de publicaciones por cuenta
+  maximo: number; // tope técnico por cuenta (la app trae todo el período)
+  frecuencia?: "nunca" | "semanal" | "diaria"; // solo para la automática: reels y carruseles
 };
 
-export const SYNC_DIARIA_DEFECTO: Omit<OpcionesSync, "referenteIds"> = { feed: true, historias: true, dias: 7, maximo: 8 };
-export const SYNC_PRIMERA_VEZ: Omit<OpcionesSync, "referenteIds"> = { feed: true, historias: true, dias: 30, maximo: 30 };
+export const SIN_TOPE = 500;
+export const SYNC_DIARIA_DEFECTO: Omit<OpcionesSync, "referenteIds"> = { feed: false, historias: true, dias: 7, maximo: SIN_TOPE, frecuencia: "semanal" };
+export const SYNC_PRIMERA_VEZ: Omit<OpcionesSync, "referenteIds"> = { feed: true, historias: true, dias: 30, maximo: SIN_TOPE };
+
+// Qué corre hoy la sincronización automática: historias todos los días; feed según la frecuencia elegida.
+export function opcionesDeHoy(cfg: Omit<OpcionesSync, "referenteIds">): Omit<OpcionesSync, "referenteIds"> {
+  const frecuencia = cfg.frecuencia ?? (cfg.feed ? "diaria" : "nunca");
+  const dia = new Date().toLocaleDateString("en-US", { weekday: "short", timeZone: "America/Argentina/Buenos_Aires" });
+  const feedHoy = frecuencia === "diaria" || (frecuencia === "semanal" && dia === "Mon");
+  return { ...cfg, feed: feedHoy, dias: frecuencia === "semanal" ? 7 : 2, maximo: SIN_TOPE };
+}
 
 export async function leerSyncDiaria(): Promise<Omit<OpcionesSync, "referenteIds">> {
   const { data } = await db().from("ajustes").select("valor").eq("clave", "sync_diaria").maybeSingle();
@@ -142,7 +152,7 @@ export async function iniciarSincronizacion(o: OpcionesSync): Promise<string> {
   const conFeed = o.feed ? refs.filter((r) => una || r.contenido_activo) : [];
   const conHistorias = o.historias ? refs.filter((r) => una || r.historias_activo) : [];
   const url = (u: string) => `https://www.instagram.com/${u}/`;
-  const maximo = Math.min(Math.max(Math.round(o.maximo) || 8, 1), 500);
+  const maximo = Math.min(Math.max(Math.round(o.maximo) || SIN_TOPE, 1), SIN_TOPE);
   const periodo = o.dias > 0 ? `últimos ${o.dias} días` : "sin límite de fecha";
   const nombres = (l: { ig_username: string }[]) => (l.length <= 3 ? l.map((r) => `@${r.ig_username}`).join(", ") : `${l.length} cuentas`);
 
@@ -160,7 +170,7 @@ export async function iniciarSincronizacion(o: OpcionesSync): Promise<string> {
           ...(o.dias > 0 ? { onlyPostsNewerThan: `${Math.round(o.dias)} days` } : {}),
         },
         "posts",
-        `Feed de ${nombres(conFeed)} · ${periodo}, hasta ${maximo} c/u`,
+        `Reels y carruseles de ${nombres(conFeed)} · ${periodo}`,
         conFeed.length * maximo,
       ),
     );
@@ -179,7 +189,7 @@ export async function iniciarSincronizacion(o: OpcionesSync): Promise<string> {
   await Promise.all(tareas);
 
   const partes = [
-    conFeed.length && `feed de ${conFeed.length} ${conFeed.length === 1 ? "cuenta" : "cuentas"} (${o.dias > 0 ? `últimos ${o.dias} días, ` : ""}hasta ${maximo} c/u)`,
+    conFeed.length && `reels y carruseles de ${conFeed.length} ${conFeed.length === 1 ? "cuenta" : "cuentas"} (${o.dias > 0 ? `últimos ${o.dias} días` : "todo"})`,
     conHistorias.length && `historias de ${conHistorias.length} ${conHistorias.length === 1 ? "cuenta" : "cuentas"}`,
   ].filter(Boolean);
   return `Sincronizando ${partes.join(" y ")}. Tarda entre 1 y 5 minutos.`;
@@ -404,4 +414,55 @@ export async function transcribirPublicacion(id: string) {
     })
     .eq("id", id);
   if (e2) throw new Error(e2.message);
+}
+
+
+// ---------- Banco de hooks: transcribir a pedido (US$ 0,015 por reel) ----------
+
+export const PRECIO_TRANSCRIPCION = 0.015;
+
+export async function pedirTranscripciones(ids: string[]): Promise<string> {
+  if (!ids.length) return "No hay reels para transcribir con esos filtros.";
+  const { data } = await db().from("publicaciones").select("ig_id").in("id", ids.slice(0, 300)).eq("tipo", "reel");
+  const codigos = ((data ?? []) as { ig_id: string }[]).map((p) => p.ig_id);
+  if (!codigos.length) return "No hay reels para transcribir con esos filtros.";
+  await arrancar(
+    ACTOR_TRANSCRIPCION,
+    { reelUrls: codigos.map((c) => `https://www.instagram.com/reel/${c}/`), includeOnScreenText: true },
+    "transcripciones",
+    `Hooks de ${codigos.length} reels`,
+    codigos.length,
+  );
+  return `Pidiendo los hooks de ${codigos.length} reels (~US$ ${(codigos.length * PRECIO_TRANSCRIPCION).toFixed(2)}). Tarda unos minutos.`;
+}
+
+export async function procesarTranscripciones(items: Record<string, unknown>[]): Promise<number> {
+  let guardadas = 0;
+  for (const it of items) {
+    if (it._summary || it.status !== "transcribed" || !it.shortCode) continue;
+    const texto = ((it.transcript as string) || (it.onScreenText as string) || "").trim();
+    const { data } = await db().from("publicaciones").select("id, analisis").eq("ig_id", String(it.shortCode)).maybeSingle();
+    if (!data) continue;
+    await db()
+      .from("publicaciones")
+      .update({
+        transcripcion: texto || "(El reel no tiene voz ni texto para transcribir)",
+        hook: (it.hook3s as string) || texto.split(/(?<=[.!?])\s/)[0]?.slice(0, 300) || null,
+        analisis: {
+          ...(((data as { analisis: object | null }).analisis as object) ?? {}),
+          transcripcion: {
+            idioma: (it.language as string) ?? null,
+            segmentos: ((it.segments as { start: number; end: number; text: string }[]) ?? []).map((s) => ({
+              start: Math.round(s.start * 10) / 10,
+              end: Math.round(s.end * 10) / 10,
+              text: s.text.trim(),
+            })),
+            texto_en_pantalla: (it.onScreenText as string) ?? null,
+          },
+        },
+      })
+      .eq("id", (data as { id: string }).id);
+    guardadas++;
+  }
+  return guardadas;
 }

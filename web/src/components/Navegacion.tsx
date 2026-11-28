@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/", etiqueta: "Contenido", detalle: "Reels, carruseles e historias", icono: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" },
   { href: "/referentes", etiqueta: "Referentes", detalle: "Cuentas y formatos", icono: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8" },
   { href: "/ideas", etiqueta: "Banco de ideas", detalle: "Lo que guardaste", icono: "M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2Z" },
+  { href: "/hooks", etiqueta: "Banco de hooks", detalle: "Primeras frases que funcionan", icono: "M7 8h10M7 12h6M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12Z" },
   { href: "/clientes", etiqueta: "Clientes", detalle: "De dónde vino cada uno", icono: "M3 12h4l3 8 4-16 3 8h4" },
   { href: "/negocios", etiqueta: "Negocios", detalle: "Tus cuentas y ManyChat", icono: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" },
   { href: "/metricas", etiqueta: "Métricas", detalle: "Tus cuentas y clientes", icono: "M18 20V10M12 20V4M6 20v-6" },

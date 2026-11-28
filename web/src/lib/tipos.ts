@@ -10,6 +10,7 @@ export type Referente = {
   historias_activo: boolean;
   ultima_sync: string | null;
   created_at: string;
+  carpeta_id: string | null;
 };
 
 export type Publicacion = {

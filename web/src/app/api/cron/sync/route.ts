@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { completarPortadas, iniciarSincronizacion, leerSyncDiaria } from "@/lib/apify";
+import { completarPortadas, iniciarSincronizacion, leerSyncDiaria, opcionesDeHoy } from "@/lib/apify";
 import { instagramConfigurado, sincronizarTodasLasCuentas } from "@/lib/instagram";
 import { subirHistoriasPendientes } from "@/lib/drive";
 import { mudarImagenesAR2, r2Configurado } from "@/lib/almacen";
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   }
   const resultado: Record<string, unknown> = {};
   try {
-    resultado.referentes = await iniciarSincronizacion(await leerSyncDiaria());
+    resultado.referentes = await iniciarSincronizacion(opcionesDeHoy(await leerSyncDiaria()));
   } catch (e) {
     resultado.errorReferentes = (e as Error).message;
   }

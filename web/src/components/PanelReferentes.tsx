@@ -7,15 +7,32 @@ export default function PanelReferentes({
   referentes,
   activo,
   enlace,
+  carpetas = [],
+  carpetaActiva = "",
+  enlaceCarpeta,
 }: {
   referentes: Referente[];
   activo: string;
   enlace: (id: string) => string;
+  carpetas?: { id: string; nombre: string }[];
+  carpetaActiva?: string;
+  enlaceCarpeta?: (id: string) => string;
 }) {
   const fila = (on: boolean) =>
     `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition ${on ? "bg-panel-2 text-texto ring-1 ring-borde" : "text-suave hover:bg-panel-2/60 hover:text-texto"}`;
   return (
-    <aside aria-label="Referentes" className="flex flex-col gap-1 rounded-xl border border-borde bg-panel p-2 lg:sticky lg:top-6">
+    <aside aria-label="Referentes" className="flex flex-col gap-1 rounded-xl border border-borde bg-panel p-2 lg:sticky lg:top-6 lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
+      {carpetas.length > 0 && enlaceCarpeta && (
+        <div className="mb-1 flex flex-col gap-1 border-b border-borde pb-2">
+          <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-medium text-tenue">Carpetas</p>
+          {[{ id: "", nombre: "Todas" }, ...carpetas].map((c) => (
+            <Link key={c.id || "todas"} href={enlaceCarpeta(c.id)} scroll={false} aria-current={carpetaActiva === c.id ? "true" : undefined} className={fila(carpetaActiva === c.id)}>
+              <span aria-hidden="true">{c.id ? "📁" : "🗂️"}</span>
+              <span className="truncate">{c.nombre}</span>
+            </Link>
+          ))}
+        </div>
+      )}
       <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-medium text-tenue">Referentes</p>
       <Link href={enlace("")} scroll={false} aria-current={!activo ? "true" : undefined} className={fila(!activo)}>
         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-acento/15 text-xs font-bold text-acento">∗</span>

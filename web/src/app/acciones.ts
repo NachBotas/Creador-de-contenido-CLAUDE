@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { COOKIE_SESION, contrasenaCorrecta, crearTokenSesion, sesionValida } from "@/lib/auth";
 import { db } from "@/lib/supabase";
-import { completarPortadas, guardarSyncDiaria, iniciarSincronizacion, SYNC_PRIMERA_VEZ } from "@/lib/apify";
+import { completarPortadas, guardarSyncDiaria, iniciarSincronizacion, SIN_TOPE, SYNC_PRIMERA_VEZ } from "@/lib/apify";
 
 async function exigirSesion() {
   const c = await cookies();
@@ -78,15 +78,15 @@ export async function eliminarReferente(id: string) {
 }
 
 function leerOpciones(form: FormData) {
-  const num = (k: string, def: number) => {
-    const v = Number(form.get(k));
-    return Number.isFinite(v) && v >= 0 ? v : def;
-  };
+  const dias = Number(form.get("dias"));
+  const frecuenciaCruda = String(form.get("frecuencia") ?? "");
+  const frecuencia = (["nunca", "semanal", "diaria"].includes(frecuenciaCruda) ? frecuenciaCruda : undefined) as "nunca" | "semanal" | "diaria" | undefined;
   return {
-    feed: form.get("feed") === "1",
+    feed: frecuencia ? frecuencia !== "nunca" : form.get("feed") === "1",
     historias: form.get("historias") === "1",
-    dias: num("dias", 7),
-    maximo: num("maximo", 8) || 8,
+    dias: Number.isFinite(dias) && dias > 0 ? dias : 7,
+    maximo: SIN_TOPE,
+    ...(frecuencia ? { frecuencia } : {}),
   };
 }
 
@@ -177,7 +177,10 @@ export async function eliminarFormato(id: number) {
 
 export async function guardarIdea(publicacionId: string) {
   await exigirSesion();
-  await db().from("ideas").upsert({ publicacion_id: publicacionId }, { onConflict: "publicacion_id" });
+  // Por defecto va a la carpeta del referente
+  const { data } = await db().from("publicaciones").select("referentes(carpeta_id)").eq("id", publicacionId).maybeSingle();
+  const carpeta = (data as { referentes?: { carpeta_id: string | null } | null } | null)?.referentes?.carpeta_id ?? null;
+  await db().from("ideas").upsert({ publicacion_id: publicacionId, carpeta_id: carpeta }, { onConflict: "publicacion_id" });
   revalidatePath("/", "layout");
 }
 
@@ -381,4 +384,71 @@ export async function borrarHistoriasDeLaNube(ids: string[]): Promise<string> {
   await db().from("historias").update({ archivos_borrados: true, media_url: null, miniatura_url: null }).in("id", filas.map((f) => f.id));
   revalidatePath("/", "layout");
   return `Borradas de la nube ${filas.length} ${filas.length === 1 ? "historia" : "historias"}.`;
+}
+
+// ---------- Carpetas por rubro ----------
+
+export async function agregarCarpeta(form: FormData) {
+  await exigirSesion();
+  const nombre = String(form.get("nombre") ?? "").trim().slice(0, 40);
+  if (!nombre) volver("/referentes", "Escribí un nombre para la carpeta.", true);
+  const { count } = await db().from("carpetas").select("id", { count: "exact", head: true });
+  const { error } = await db().from("carpetas").insert({ nombre, orden: (count ?? 0) + 1 });
+  if (error) volver("/referentes", error.code === "23505" ? "Esa carpeta ya existe." : error.message, true);
+  revalidatePath("/", "layout");
+  volver("/referentes", `Carpeta "${nombre}" creada. Asignale referentes con el selector de cada cuenta.`);
+}
+
+export async function eliminarCarpeta(id: string) {
+  await exigirSesion();
+  await db().from("carpetas").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function asignarCarpetaReferente(referenteId: string, carpetaId: string | null) {
+  await exigirSesion();
+  await db().from("referentes").update({ carpeta_id: carpetaId }).eq("id", referenteId);
+  revalidatePath("/", "layout");
+}
+
+export async function asignarCarpetaIdea(publicacionId: string, carpetaId: string | null) {
+  await exigirSesion();
+  await db().from("ideas").update({ carpeta_id: carpetaId }).eq("publicacion_id", publicacionId);
+  await db().from("hooks_guardados").update({ carpeta_id: carpetaId }).eq("publicacion_id", publicacionId);
+  revalidatePath("/", "layout");
+}
+
+// ---------- Banco de hooks ----------
+
+export async function pedirHooksAccion(form: FormData) {
+  await exigirSesion();
+  const ids = form.getAll("reels").map(String).filter((x) => /^[0-9a-f-]{36}$/.test(x));
+  const { pedirTranscripciones } = await import("@/lib/apify");
+  let msg = "";
+  try {
+    msg = await pedirTranscripciones(ids);
+  } catch (e) {
+    redirect(`/hooks?error=${encodeURIComponent((e as Error).message)}`);
+  }
+  redirect(`/hooks?msg=${encodeURIComponent(msg)}`);
+}
+
+export async function guardarHook(publicacionId: string) {
+  await exigirSesion();
+  const { data } = await db().from("publicaciones").select("referentes(carpeta_id)").eq("id", publicacionId).maybeSingle();
+  const carpeta = (data as { referentes?: { carpeta_id: string | null } | null } | null)?.referentes?.carpeta_id ?? null;
+  await db().from("hooks_guardados").upsert({ publicacion_id: publicacionId, carpeta_id: carpeta }, { onConflict: "publicacion_id" });
+  revalidatePath("/hooks");
+}
+
+export async function quitarHook(publicacionId: string) {
+  await exigirSesion();
+  await db().from("hooks_guardados").delete().eq("publicacion_id", publicacionId);
+  revalidatePath("/hooks");
+}
+
+export async function moverHook(publicacionId: string, carpetaId: string | null) {
+  await exigirSesion();
+  await db().from("hooks_guardados").update({ carpeta_id: carpetaId }).eq("publicacion_id", publicacionId);
+  revalidatePath("/hooks");
 }

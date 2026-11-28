@@ -2,7 +2,9 @@ import { agregarFormato, agregarReferente, completarPortadasAccion, guardarAjust
 import { leerSyncDiaria, pendientesDePortada } from "@/lib/apify";
 import FormSync from "@/components/FormSync";
 import ProgresoSync from "@/components/ProgresoSync";
-import { conteosPorReferente, listarFormatos, listarReferentes } from "@/lib/datos";
+import { conteosPorReferente, listarCarpetas, listarFormatos, listarReferentes, ritmoReferentes } from "@/lib/datos";
+import SelectorCarpeta, { BorrarCarpeta } from "@/components/SelectorCarpeta";
+import { agregarCarpeta } from "@/app/acciones";
 import { fechaHora, numero } from "@/lib/formato";
 import Encabezado, { Aviso, Vacio } from "@/components/Encabezado";
 import { BotonEliminar, BotonEliminarFormato, Interruptor } from "@/components/ControlesReferente";
@@ -13,8 +15,8 @@ export const metadata = { title: "Referentes · Radar de contenido" };
 
 export default async function Referentes({ searchParams }: { searchParams: Promise<{ msg?: string; error?: string; sync?: string }> }) {
   const { msg, error, sync } = await searchParams;
-  const [referentes, formatos, conteos, diaria, sinPortada] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente(), leerSyncDiaria(), pendientesDePortada()]);
-  const refsSync = referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo }));
+  const [referentes, formatos, conteos, diaria, sinPortada, ritmo, carpetas] = await Promise.all([listarReferentes(), listarFormatos(), conteosPorReferente(), leerSyncDiaria(), pendientesDePortada(), ritmoReferentes(), listarCarpetas()]);
+  const refsSync = referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo, ritmo: ritmo.get(r.id) ?? 0 }));
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -67,6 +69,7 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {carpetas.length > 0 && <SelectorCarpeta id={r.id} actual={r.carpeta_id} carpetas={carpetas} de="referente" />}
                   <Interruptor id={r.id} campo="contenido_activo" valor={r.contenido_activo} texto="Contenido" />
                   <Interruptor id={r.id} campo="historias_activo" valor={r.historias_activo} texto="Historias" />
                   <a href={`?sync=${r.id}#sincronizar`} className="rounded-md px-2 py-1 text-xs text-suave hover:bg-panel-2 hover:text-texto">
@@ -102,7 +105,7 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
               accion={sincronizar}
               referentes={refsSync}
               modo="ahora"
-              inicial={{ feed: true, historias: true, dias: 30, maximo: 30 }}
+              inicial={{ feed: true, historias: true, dias: 7 }}
               cuentaInicial={referentes.some((r) => r.id === sync) ? sync : ""}
             />
           </section>
@@ -115,6 +118,36 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
           </section>
         </div>
       )}
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="font-medium">Carpetas por rubro</h2>
+          <p className="text-sm text-suave">Agrupá a tus referentes por tema (Trading, Visa, Marketing…). Después filtrás por carpeta en Contenido y en el Banco de ideas.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {carpetas.map((c) => (
+            <span key={c.id} className="flex items-center rounded-lg border border-borde bg-panel px-3 py-1.5 text-sm">
+              📁 {c.nombre}
+              <span className="ml-1.5 text-xs text-tenue">{referentes.filter((x) => x.carpeta_id === c.id).length}</span>
+              <BorrarCarpeta id={c.id} nombre={c.nombre} />
+            </span>
+          ))}
+        </div>
+        <form action={agregarCarpeta} className="flex max-w-md gap-2">
+          <label htmlFor="nombre-carpeta" className="sr-only">
+            Nombre de la carpeta
+          </label>
+          <input
+            id="nombre-carpeta"
+            name="nombre"
+            required
+            maxLength={40}
+            placeholder="Ej: Trading, Visa, Marketing…"
+            className="h-10 min-w-0 flex-1 rounded-md border border-borde bg-fondo px-3 text-sm outline-none focus:border-acento"
+          />
+          <button className="h-10 rounded-md border border-borde px-4 text-sm hover:bg-panel">Crear carpeta</button>
+        </form>
+      </section>
 
       <section className="flex flex-col gap-3">
         <div>

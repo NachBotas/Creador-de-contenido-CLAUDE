@@ -7,6 +7,8 @@ export type Filtros = {
   tipo: "todos" | "reel" | "carrusel";
   formato: string; // "" = todos, "sin" = sin clasificar, o id
   referente: string;
+  carpeta: string; // "" = todas
+  referentesCarpeta: string[] | null; // ids de los referentes de la carpeta (se completa aparte)
   orden: string;
   min: number; // outlier mínimo
   minCom: number; // comentarios mínimos
@@ -28,6 +30,8 @@ export function leerFiltros(sp: SP, tipo: Filtros["tipo"]): Filtros {
     tipo: tipo === "todos" && (t === "reel" || t === "carrusel") ? t : tipo,
     formato: uno(sp.formato),
     referente: uno(sp.referente),
+    carpeta: uno(sp.carpeta),
+    referentesCarpeta: null,
     orden: uno(sp.orden) || "outlier",
     min: Number.isFinite(min) && min > 0 ? min : 0,
     minCom: Math.max(0, Number(uno(sp.mincom)) || 0),
@@ -55,6 +59,7 @@ function aplicarFiltros(q: any, f: Filtros, conFormato: boolean) {
   if (conFormato && f.formato === "sin") q = q.is("formato_id", null);
   else if (conFormato && f.formato) q = q.eq("formato_id", Number(f.formato));
   if (f.referente) q = q.eq("referente_id", f.referente);
+  else if (f.referentesCarpeta) q = q.in("referente_id", f.referentesCarpeta.length ? f.referentesCarpeta : ["00000000-0000-0000-0000-000000000000"]);
   if (f.min > 0) q = q.gte("outlier", f.min);
   if (f.minCom > 0) q = q.gte("comentarios", f.minCom);
   if (f.dias > 0) q = q.gte("fecha_publicacion", new Date(Date.now() - f.dias * 86_400_000).toISOString());
@@ -79,46 +84,48 @@ export async function listarPublicaciones(f: Filtros, limite = 120): Promise<Pub
 // Cuántas piezas hay por formato y por tipo con los filtros actuales (para las pestañas).
 export type RankingFormato = { clave: string; piezas: number; ganadores: number; outlierMediano: number | null; comentariosPromedio: number };
 
+// Conteos para pestañas y ranking, calculados en la base (una sola consulta liviana).
 export async function contar(
   f: Filtros,
 ): Promise<{ porFormato: Map<string, number>; porTipo: Map<string, number>; ranking: RankingFormato[] }> {
-  let q = db().from("publicaciones_con_score").select("formato_id, tipo, outlier, es_ganador, comentarios");
-  q = aplicarFiltros(q, { ...f, tipo: "todos" }, false).limit(5000);
-  const { data, error } = await q;
+  const referentes = f.referente ? [f.referente] : f.referentesCarpeta;
+  const { data, error } = await db().rpc("conteos_publicaciones", {
+    p_tipo: f.tipo,
+    p_referentes: referentes && referentes.length ? referentes : referentes ? ["00000000-0000-0000-0000-000000000000"] : null,
+    p_desde: f.dias > 0 ? new Date(Date.now() - f.dias * 86_400_000).toISOString() : null,
+    p_min: f.min > 0 ? f.min : null,
+    p_mincom: f.minCom > 0 ? f.minCom : null,
+    p_ganadores: f.ganadores,
+    p_cta: f.cta,
+    p_q: f.q ? f.q.replace(/[%_]/g, " ") : null,
+  });
   if (error) throw new Error(error.message);
-  const porFormato = new Map<string, number>();
-  const porTipo = new Map<string, number>();
-  const sumar = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-  const grupos = new Map<string, { outliers: number[]; ganadores: number; comentarios: number; piezas: number }>();
-  type Fila = { formato_id: number | null; tipo: string; outlier: number | null; es_ganador: boolean; comentarios: number | null };
-  for (const fila of (data ?? []) as Fila[]) {
-    const tipo = fila.tipo === "imagen" ? "carrusel" : fila.tipo;
-    sumar(porTipo, "todos");
-    sumar(porTipo, tipo);
-    if (f.tipo !== "todos" && tipo !== f.tipo) continue;
-    const clave = fila.formato_id === null ? "sin" : String(fila.formato_id);
-    sumar(porFormato, clave);
-    sumar(porFormato, "");
-    const g = grupos.get(clave) ?? { outliers: [], ganadores: 0, comentarios: 0, piezas: 0 };
-    g.piezas++;
-    if (fila.outlier !== null) g.outliers.push(Number(fila.outlier));
-    if (fila.es_ganador) g.ganadores++;
-    g.comentarios += fila.comentarios ?? 0;
-    grupos.set(clave, g);
-  }
-  const ranking = [...grupos.entries()]
-    .map(([clave, g]) => {
-      const o = g.outliers.sort((a, b) => a - b);
-      return {
-        clave,
-        piezas: g.piezas,
-        ganadores: g.ganadores,
-        outlierMediano: o.length ? o[Math.floor(o.length / 2)] : null,
-        comentariosPromedio: Math.round(g.comentarios / g.piezas),
-      };
-    })
-    .sort((a, b) => (b.outlierMediano ?? 0) - (a.outlierMediano ?? 0));
+  const r = (data ?? {}) as {
+    porTipo?: Record<string, number>;
+    todos?: number;
+    porFormato?: Record<string, number>;
+    totalTipo?: number;
+    ranking?: { clave: string; piezas: number; ganadores: number; outlier_mediano: number | null; comentarios_promedio: number }[];
+  };
+  const porTipo = new Map<string, number>(Object.entries(r.porTipo ?? {}));
+  porTipo.set("todos", r.todos ?? 0);
+  const porFormato = new Map<string, number>(Object.entries(r.porFormato ?? {}));
+  porFormato.set("", r.totalTipo ?? 0);
+  const ranking = (r.ranking ?? []).map((x) => ({
+    clave: x.clave,
+    piezas: x.piezas,
+    ganadores: x.ganadores,
+    outlierMediano: x.outlier_mediano === null ? null : Number(x.outlier_mediano),
+    comentariosPromedio: Number(x.comentarios_promedio) || 0,
+  }));
   return { porFormato, porTipo, ranking };
+}
+
+export type Carpeta = { id: string; nombre: string; orden: number };
+
+export async function listarCarpetas(): Promise<Carpeta[]> {
+  const { data } = await db().from("carpetas").select("id, nombre, orden").order("orden").order("nombre");
+  return (data ?? []) as Carpeta[];
 }
 
 export async function obtenerPublicacion(id: string): Promise<Publicacion | null> {
@@ -168,7 +175,7 @@ export async function conteosPorReferente(): Promise<Map<string, { publicaciones
 
 export type Secuencia = { referenteId: string; dia: string; historias: Historia[]; activa: boolean };
 
-export async function listarSecuencias(dias: number, referente: string): Promise<Secuencia[]> {
+export async function listarSecuencias(dias: number, referente: string, ids: string[] | null = null): Promise<Secuencia[]> {
   let q = db()
     .from("historias")
     .select("*")
@@ -176,6 +183,7 @@ export async function listarSecuencias(dias: number, referente: string): Promise
     .order("fecha_publicacion", { ascending: true })
     .limit(3000);
   if (referente) q = q.eq("referente_id", referente);
+  else if (ids) q = q.in("referente_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   const grupos = new Map<string, Secuencia>();
@@ -211,8 +219,16 @@ export async function idsGuardados(): Promise<Set<string>> {
   return new Set(((data ?? []) as { publicacion_id: string }[]).map((r) => r.publicacion_id));
 }
 
-export async function listarIdeas(): Promise<Publicacion[]> {
-  const { data: ideas, error } = await db().from("ideas").select("publicacion_id, created_at").order("created_at", { ascending: false }).limit(500);
+export async function carpetasDeIdeas(): Promise<Map<string, string | null>> {
+  const { data } = await db().from("ideas").select("publicacion_id, carpeta_id").limit(5000);
+  return new Map(((data ?? []) as { publicacion_id: string; carpeta_id: string | null }[]).map((i) => [i.publicacion_id, i.carpeta_id]));
+}
+
+export async function listarIdeas(carpeta = ""): Promise<Publicacion[]> {
+  let q = db().from("ideas").select("publicacion_id, created_at").order("created_at", { ascending: false }).limit(500);
+  if (carpeta === "sin") q = q.is("carpeta_id", null);
+  else if (carpeta) q = q.eq("carpeta_id", carpeta);
+  const { data: ideas, error } = await q;
   if (error) throw new Error(error.message);
   const ids = ((ideas ?? []) as { publicacion_id: string }[]).map((i) => i.publicacion_id);
   if (!ids.length) return [];
@@ -222,10 +238,24 @@ export async function listarIdeas(): Promise<Publicacion[]> {
   return ids.map((id) => porId.get(id)).filter((p): p is Publicacion => Boolean(p));
 }
 
-export async function contarHistorias(dias: number, referente: string): Promise<number> {
+export async function contarHistorias(dias: number, referente: string, ids: string[] | null = null): Promise<number> {
   let q = db().from("historias").select("id", { count: "exact", head: true });
   if (dias > 0) q = q.gte("fecha_publicacion", new Date(Date.now() - dias * 86_400_000).toISOString());
   if (referente) q = q.eq("referente_id", referente);
+  else if (ids) q = q.in("referente_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
   const { count } = await q;
   return count ?? 0;
+}
+
+// Cuántas publicaciones por día suele subir cada referente (últimos 30 días). Sirve para estimar costos.
+export async function ritmoReferentes(): Promise<Map<string, number>> {
+  const { data } = await db()
+    .from("publicaciones")
+    .select("referente_id")
+    .gte("fecha_publicacion", new Date(Date.now() - 30 * 86_400_000).toISOString())
+    .limit(10000);
+  const m = new Map<string, number>();
+  for (const r of (data ?? []) as { referente_id: string }[]) m.set(r.referente_id, (m.get(r.referente_id) ?? 0) + 1);
+  for (const [k, v] of m) m.set(k, Math.round((v / 30) * 10) / 10);
+  return m;
 }

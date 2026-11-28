@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { itemsDelDataset, procesarDetalles, procesarHistorias, procesarPosts } from "@/lib/apify";
+import { itemsDelDataset, procesarDetalles, procesarHistorias, procesarPosts, procesarTranscripciones } from "@/lib/apify";
 import { subirHistoriasPendientes } from "@/lib/drive";
 import { db } from "@/lib/supabase";
 
@@ -36,7 +36,10 @@ export async function POST(req: Request) {
       guardados = await procesarHistorias(items);
       await subirHistoriasPendientes(150_000).catch(() => undefined);
     }
+    else if (tipo === "transcripciones") guardados = await procesarTranscripciones(items);
     else return NextResponse.json({ error: "Tipo desconocido" }, { status: 400 });
+    // Recalcular outlier y ganadores con los números nuevos
+    if (tipo === "posts" || tipo === "detalles") await db().rpc("recalcular_scores").then(() => undefined, () => undefined);
     await marcar({ estado: "listo", guardados: tipo === "detalles" ? items.length : guardados, terminado_at: new Date().toISOString() });
     revalidatePath("/", "layout");
     return NextResponse.json({ ok: true, tipo, guardados });

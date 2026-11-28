@@ -14,8 +14,16 @@
 - **A futuro:** conectar la app de alumnos del socio (otro Vercel) para marcar los cierres solos,
   cruzando por @ de Instagram, email o teléfono.
 
+## Audio de los reels con música de Instagram
+- **Estado:** en pausa. Algunos reels se ven sin sonido porque Instagram guarda la música aparte del video.
+- **Qué haría falta:** traer también la pista de audio con Apify y reproducirla sincronizada con el video
+  (y unirlas al descargar).
+
+## Pestaña Reels de @tino.mossu
+- **Estado:** en pausa, falta confirmar qué se quiere ver ahí.
+
 ## Descartado por ahora (código guardado, sin usar)
 - **Google Drive para historias** (`web/src/lib/drive.ts`, `docs/guia-google-drive.md`): se sacó de la pantalla.
-  Las historias siguen guardándose en Supabase (miniatura) como antes.
+  Las historias (fotos y videos) se guardan en Cloudflare R2.
 - **Sort Feed** (`web/src/lib/sortfeed.ts`, `scripts/importar_sortfeed.py`): se sacó el panel de importar.
   Feed, historias y transcripciones van todos por Apify.

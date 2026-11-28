@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { contar, contarHistorias, listarSecuencias, idsGuardados, leerFiltros, listarFormatos, listarPublicaciones, listarReferentes, obtenerPublicacion, type Filtros } from "@/lib/datos";
+import { listarCarpetas, ritmoReferentes, contar, contarHistorias, listarSecuencias, idsGuardados, leerFiltros, listarFormatos, listarPublicaciones, listarReferentes, obtenerPublicacion, type Filtros } from "@/lib/datos";
 import type { Publicacion } from "@/lib/tipos";
 import AutoEnviar from "./AutoEnviar";
 import Encabezado, { Aviso, Vacio } from "./Encabezado";
 import FormSync from "./FormSync";
 import ProgresoSync from "./ProgresoSync";
+import AlertasVirales from "./AlertasVirales";
 import { sincronizar } from "@/app/acciones";
 import Tarjeta from "./Tarjeta";
 import PanelReferentes from "./PanelReferentes";
@@ -75,22 +76,24 @@ export default async function VistaPublicaciones({
   const esHistorias = tipo === "todos" && sp.t === "historias";
   const porFormato = soloFormatos || f.tipo === "reel";
   const diasHist = f.dias > 0 ? f.dias : 365;
-  const ver = typeof sp.ver === "string" && /^[0-9a-f-]{36}$/.test(sp.ver) ? sp.ver : "";
-  const [formatos, referentes, pubs, { porFormato: conteo, porTipo, ranking }, guardadas, abierta] = await Promise.all([
+  // Referentes y carpetas primero: la carpeta define qué cuentas entran en el filtro.
+  const [todosReferentes, carpetas] = await Promise.all([listarReferentes(), listarCarpetas()]);
+  const carpetaActiva = carpetas.find((c) => c.id === f.carpeta);
+  const referentes = carpetaActiva ? todosReferentes.filter((r) => r.carpeta_id === carpetaActiva.id) : todosReferentes;
+  if (carpetaActiva) f.referentesCarpeta = referentes.map((r) => r.id);
+  const idsHistorias = f.referente ? [f.referente] : carpetaActiva ? f.referentesCarpeta! : null;
+  const [formatos, pubs, { porFormato: conteo, porTipo, ranking }, guardadas, cantHistorias, secuencias, ritmo] = await Promise.all([
     listarFormatos(),
-    listarReferentes(),
     listarPublicaciones(f, f.vista === "tablero" ? 400 : Math.min(Math.max(Number(sp.limite) || 40, 40), 1000)),
     contar(f),
     idsGuardados(),
-    ver ? obtenerPublicacion(ver) : Promise.resolve(null),
-  ]);
-  const [cantHistorias, secuencias] = await Promise.all([
-    tipo === "todos" ? contarHistorias(diasHist, f.referente) : Promise.resolve(0),
-    esHistorias ? listarSecuencias(diasHist, f.referente) : Promise.resolve([]),
+    tipo === "todos" ? contarHistorias(diasHist, f.referente, idsHistorias) : Promise.resolve(0),
+    esHistorias ? listarSecuencias(diasHist, f.referente, idsHistorias) : Promise.resolve([]),
+    tipo === "todos" ? ritmoReferentes() : Promise.resolve(new Map<string, number>()),
   ]);
   const refPorId = new Map(referentes.map((r) => [r.id, r]));
   const refActivo = f.referente ? refPorId.get(f.referente) : undefined;
-  const hrefVer = (id: string) => enlace(sp, { ver: id });
+  const hrefVer = (id: string) => `/p/${id}`;
   const hrefCerrar = enlace(sp, { ver: "" });
 
   const tabs = [
@@ -102,9 +105,30 @@ export default async function VistaPublicaciones({
   return (
     <div className="mx-auto grid max-w-[1700px] gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[230px_minmax(0,1fr)] lg:px-8">
       <div className="max-lg:hidden">
-        <PanelReferentes referentes={referentes} activo={f.referente} enlace={(id) => enlace(sp, { referente: id, ver: "" })} />
+        <PanelReferentes
+          referentes={referentes}
+          activo={f.referente}
+          enlace={(id) => enlace(sp, { referente: id, ver: "", limite: "" })}
+          carpetas={carpetas}
+          carpetaActiva={f.carpeta}
+          enlaceCarpeta={(id) => enlace(sp, { carpeta: id, referente: "", ver: "", limite: "" })}
+        />
       </div>
       <div className="flex min-w-0 flex-col gap-5">
+      {carpetas.length > 0 && (
+        <nav aria-label="Carpetas" className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:hidden">
+          {[{ id: "", nombre: "Todas las carpetas" }, ...carpetas].map((c) => (
+            <Link
+              key={c.id || "todas"}
+              href={enlace(sp, { carpeta: c.id, referente: "", ver: "", limite: "" })}
+              scroll={false}
+              className={`shrink-0 rounded-lg border px-3 py-1.5 text-sm ${f.carpeta === c.id ? "border-acento/50 bg-acento/10" : "border-borde text-suave"}`}
+            >
+              {c.id ? `📁 ${c.nombre}` : c.nombre}
+            </Link>
+          ))}
+        </nav>
+      )}
       <nav aria-label="Referentes" className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:hidden">
         {[{ id: "", ig_username: "Todos" }, ...referentes].map((r) => (
           <Link
@@ -134,7 +158,7 @@ export default async function VistaPublicaciones({
           </a>
         </header>
       ) : null}
-      <Encabezado titulo={refActivo ? "" : titulo} bajada={refActivo ? "" : bajada}>
+      <Encabezado titulo={refActivo ? "" : carpetaActiva ? `📁 ${carpetaActiva.nombre}` : titulo} bajada={refActivo ? "" : carpetaActiva ? `${referentes.length} referentes en esta carpeta` : bajada}>
         {porFormato && !esHistorias && (
           <div role="tablist" aria-label="Vista" className="inline-flex rounded-lg bg-panel p-1 text-xs">
             {(["grilla", "tablero"] as const).map((v) => (
@@ -154,6 +178,7 @@ export default async function VistaPublicaciones({
 
       <Aviso msg={typeof sp.msg === "string" ? sp.msg : undefined} error={typeof sp.error === "string" ? sp.error : undefined} />
       {tipo === "todos" && <ProgresoSync />}
+      {tipo === "todos" && <AlertasVirales />}
 
       {tipo === "todos" && referentes.length > 0 && (
         <details className="group rounded-xl border border-borde bg-panel">
@@ -169,9 +194,9 @@ export default async function VistaPublicaciones({
           <div className="border-t border-borde p-4">
             <FormSync
               accion={sincronizar}
-              referentes={referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo }))}
+              referentes={referentes.map((r) => ({ id: r.id, usuario: r.ig_username, contenido: r.contenido_activo, historias: r.historias_activo, ritmo: ritmo.get(r.id) ?? 0 }))}
               modo="ahora"
-              inicial={{ feed: true, historias: true, dias: 7, maximo: 10 }}
+              inicial={{ feed: true, historias: true, dias: 7 }}
               cuentaInicial={f.referente}
               volverA="contenido"
             />
@@ -295,6 +320,7 @@ export default async function VistaPublicaciones({
 
       <AutoEnviar className="flex flex-wrap items-center gap-2 rounded-xl border border-borde bg-panel p-3">
         {f.formato && <input type="hidden" name="formato" value={f.formato} />}
+        {f.carpeta && <input type="hidden" name="carpeta" value={f.carpeta} />}
         {tipo === "todos" && f.tipo !== "todos" && <input type="hidden" name="t" value={f.tipo} />}
         {f.referente && <input type="hidden" name="referente" value={f.referente} />}
         {f.vista === "tablero" && <input type="hidden" name="vista" value="tablero" />}
@@ -385,23 +411,6 @@ export default async function VistaPublicaciones({
       )}
       </div>
 
-      {abierta && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-3 py-6 backdrop-blur-sm sm:px-6" role="dialog" aria-modal="true" aria-label="Detalle de la publicación">
-          <ControlModal hrefCerrar={hrefCerrar} />
-          <Link href={hrefCerrar} scroll={false} aria-hidden="true" tabIndex={-1} className="fixed inset-0 cursor-default" />
-          <div className="relative mx-auto max-w-6xl rounded-2xl border border-borde bg-panel p-4 shadow-2xl sm:p-6">
-            <Link
-              href={hrefCerrar}
-              scroll={false}
-              aria-label="Cerrar"
-              className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full text-xl text-suave hover:bg-panel-2 hover:text-texto"
-            >
-              ×
-            </Link>
-            <DetallePublicacion p={abierta} referente={refPorId.get(abierta.referente_id)} formatos={formatos} guardada={guardadas.has(abierta.id)} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
