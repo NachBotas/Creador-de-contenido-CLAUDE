@@ -4,6 +4,7 @@ import type { Formato, Publicacion, Referente } from "@/lib/tipos";
 import { BotonIdea, BotonTranscribir, Pestanas } from "./Interactivos";
 import SelectorFormato from "./SelectorFormato";
 import ReproductorReel from "./ReproductorReel";
+import { videoSinAudio } from "@/lib/video";
 
 const ETIQUETA = { reel: "Reel", carrusel: "Carrusel", imagen: "Imagen" } as const;
 
@@ -127,7 +128,7 @@ export default async function DetallePublicacion({
     <div className="grid gap-6 md:grid-cols-[minmax(0,400px)_1fr]">
       <div className="flex flex-col gap-3">
         {esReel ? (
-          <ReproductorReel id={p.id} embed={embed} nombreArchivo={`${referente?.ig_username ?? "reel"}_${p.ig_id}.mp4`} />
+          <ReproductorReel id={p.id} embed={embed} audioAparte={videoSinAudio(p.media_url)} nombreArchivo={`${referente?.ig_username ?? "reel"}_${p.ig_id}.mp4`} />
         ) : (
           <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-xl bg-white">
             <iframe

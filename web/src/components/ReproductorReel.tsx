@@ -5,11 +5,37 @@ import { useEffect, useRef, useState } from "react";
 const VELOCIDADES = [1, 1.25, 1.5, 1.75, 2];
 
 // Reproductor propio para reels: velocidad de reproducción y descarga.
-export default function ReproductorReel({ id, embed, nombreArchivo }: { id: string; embed: string; nombreArchivo: string }) {
+export default function ReproductorReel({
+  id,
+  embed,
+  nombreArchivo,
+  audioAparte = false,
+}: {
+  id: string;
+  embed: string;
+  nombreArchivo: string;
+  audioAparte?: boolean;
+}) {
   const [modo, setModo] = useState<"propio" | "instagram">("propio");
   const [velocidad, setVelocidad] = useState(1);
   const [estado, setEstado] = useState<"cargando" | "listo" | "error">("cargando");
   const video = useRef<HTMLVideoElement>(null);
+  const audio = useRef<HTMLAudioElement>(null);
+  // El audio se pide recién cuando el video ya cargó (así no se renuevan los links dos veces a la vez).
+  const [conAudio, setConAudio] = useState(false);
+
+  // Si Instagram mandó el audio aparte, lo reproducimos pegado al video.
+  const sincronizar = (forzar = false) => {
+    const v = video.current;
+    const a = audio.current;
+    if (!v || !a) return;
+    a.playbackRate = v.playbackRate;
+    a.volume = v.volume;
+    a.muted = v.muted;
+    if (forzar || Math.abs(a.currentTime - v.currentTime) > 0.25) a.currentTime = v.currentTime;
+    if (v.paused || v.ended) a.pause();
+    else if (a.paused) a.play().catch(() => undefined);
+  };
 
   const deseada = useRef(1);
 
@@ -19,6 +45,7 @@ export default function ReproductorReel({ id, embed, nombreArchivo }: { id: stri
     if (!v) return;
     v.defaultPlaybackRate = deseada.current;
     if (v.playbackRate !== deseada.current) v.playbackRate = deseada.current;
+    sincronizar();
   };
 
   useEffect(() => {
@@ -59,14 +86,24 @@ export default function ReproductorReel({ id, embed, nombreArchivo }: { id: stri
               preload="metadata"
               onLoadedMetadata={() => {
                 setEstado("listo");
+                if (audioAparte) setConAudio(true);
                 aplicar();
               }}
               onLoadedData={aplicar}
               onPlay={aplicar}
               onPlaying={aplicar}
-              onSeeked={aplicar}
+              onPause={() => audio.current?.pause()}
+              onWaiting={() => audio.current?.pause()}
+              onEnded={() => audio.current?.pause()}
+              onSeeked={() => {
+                aplicar();
+                sincronizar(true);
+              }}
+              onTimeUpdate={() => sincronizar()}
+              onVolumeChange={() => sincronizar()}
               onCanPlay={aplicar}
               onRateChange={() => {
+                sincronizar();
                 // Si la cambiaste desde el menú del video, el botón acompaña.
                 const r = video.current?.playbackRate;
                 if (r && Math.abs(r - deseada.current) > 0.01 && VELOCIDADES.includes(r)) {
@@ -77,6 +114,9 @@ export default function ReproductorReel({ id, embed, nombreArchivo }: { id: stri
               onError={() => setEstado("error")}
               className="aspect-[9/16] w-full object-contain"
             />
+            {audioAparte && conAudio && (
+              <audio ref={audio} src={`/api/reel/${id}/audio`} preload="auto" onLoadedMetadata={() => sincronizar(true)} onCanPlay={() => sincronizar()} hidden />
+            )}
             {estado === "cargando" && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/60 px-6 text-center text-xs text-white/80">
                 Cargando video… si es un reel viejo, Instagram tarda unos segundos en darlo de nuevo.
@@ -117,6 +157,11 @@ export default function ReproductorReel({ id, embed, nombreArchivo }: { id: stri
         </div>
       )}
 
+      {audioAparte && (
+        <p className="text-center text-xs text-tenue">
+          Instagram manda este reel con el audio aparte: el video descargado sale sin sonido, por eso te dejamos bajar el audio también.
+        </p>
+      )}
       <a
         href={`/api/reel/${id}/video?descargar=1&nombre=${encodeURIComponent(nombreArchivo)}`}
         className="flex h-10 items-center justify-center gap-2 rounded-lg border border-borde px-3 text-sm hover:bg-panel-2"
@@ -126,6 +171,14 @@ export default function ReproductorReel({ id, embed, nombreArchivo }: { id: stri
         </svg>
         Descargar reel (.mp4)
       </a>
+      {audioAparte && (
+        <a
+          href={`/api/reel/${id}/audio?descargar=1&nombre=${encodeURIComponent(nombreArchivo.replace(/\.mp4$/, ".m4a"))}`}
+          className="flex h-10 items-center justify-center gap-2 rounded-lg border border-borde px-3 text-sm hover:bg-panel-2"
+        >
+          Descargar audio (.m4a)
+        </a>
+      )}
     </div>
   );
 }

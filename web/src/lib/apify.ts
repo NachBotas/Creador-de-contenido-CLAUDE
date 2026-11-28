@@ -299,6 +299,7 @@ export async function procesarPosts(items: Record<string, unknown>[]) {
       duracion_seg: typeof it.videoDuration === "number" ? Math.round(it.videoDuration) : null,
       miniatura_url: miniatura ?? (it.displayUrl as string) ?? null,
       media_url: (it.videoUrl as string) ?? null,
+      audio_url: (it.audioUrl as string) ?? null,
       slides: tipo === "carrusel" ? imagenes.filter(Boolean).map((url) => ({ url })) : null,
       fijado: it.isPinned === true,
       palabra_clave: detectarPalabraClave(caption),

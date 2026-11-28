@@ -27,6 +27,7 @@ export type Publicacion = {
   duracion_seg: number | null;
   miniatura_url: string | null;
   media_url: string | null;
+  audio_url: string | null;
   slides: { url: string }[] | null;
   formato_id: number | null;
   hook: string | null;
