@@ -11,8 +11,19 @@ export default function ReproductorReel({ id, embed, nombreArchivo }: { id: stri
   const [estado, setEstado] = useState<"cargando" | "listo" | "error">("cargando");
   const video = useRef<HTMLVideoElement>(null);
 
+  const deseada = useRef(1);
+
+  // Algunos navegadores vuelven a 1x al arrancar o cargar más video: re-aplicamos la velocidad elegida.
+  const aplicar = () => {
+    const v = video.current;
+    if (!v) return;
+    v.defaultPlaybackRate = deseada.current;
+    if (v.playbackRate !== deseada.current) v.playbackRate = deseada.current;
+  };
+
   useEffect(() => {
-    if (video.current) video.current.playbackRate = velocidad;
+    deseada.current = velocidad;
+    aplicar();
   }, [velocidad, estado]);
 
   return (
@@ -46,7 +57,23 @@ export default function ReproductorReel({ id, embed, nombreArchivo }: { id: stri
               controls
               playsInline
               preload="metadata"
-              onLoadedMetadata={() => setEstado("listo")}
+              onLoadedMetadata={() => {
+                setEstado("listo");
+                aplicar();
+              }}
+              onLoadedData={aplicar}
+              onPlay={aplicar}
+              onPlaying={aplicar}
+              onSeeked={aplicar}
+              onCanPlay={aplicar}
+              onRateChange={() => {
+                // Si la cambiaste desde el menú del video, el botón acompaña.
+                const r = video.current?.playbackRate;
+                if (r && Math.abs(r - deseada.current) > 0.01 && VELOCIDADES.includes(r)) {
+                  deseada.current = r;
+                  setVelocidad(r);
+                }
+              }}
               onError={() => setEstado("error")}
               className="aspect-[9/16] w-full object-contain"
             />
@@ -71,7 +98,11 @@ export default function ReproductorReel({ id, embed, nombreArchivo }: { id: stri
               <button
                 key={v}
                 type="button"
-                onClick={() => setVelocidad(v)}
+                onClick={() => {
+                  deseada.current = v;
+                  setVelocidad(v);
+                  aplicar();
+                }}
                 aria-pressed={velocidad === v}
                 className={`h-8 min-w-12 rounded-md px-2 text-xs font-semibold tabular-nums ${velocidad === v ? "bg-acento text-black" : "bg-panel-2 text-suave hover:text-texto"}`}
               >
