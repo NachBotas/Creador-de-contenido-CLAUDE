@@ -56,7 +56,10 @@ export async function guardarImagen(ruta: string, original: Uint8Array): Promise
       body: new Blob([datos as BlobPart], { type: tipo }),
       headers: { "Content-Type": tipo, "Cache-Control": "public, max-age=31536000, immutable" },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[r2] PUT ${ruta} falló: ${res.status} ${(await res.text()).slice(0, 200)}`);
+      return null;
+    }
     return `${baseR2()}/${ruta}`;
   }
   const { error } = await db().storage.from(BUCKET).upload(ruta, datos, { contentType: tipo, upsert: true });
@@ -109,6 +112,8 @@ export async function mudarImagenesAR2(limite = 300, limiteMs = 200_000): Promis
   const nuevas = new Map<string, string>();
   const aBorrar: string[] = [];
   let i = 0;
+  let fallidas = 0;
+  console.log(`[mudanza] inicio: ${urls.length} imágenes en Supabase, esta tanda ${tanda.length}`);
   const trabajador = async () => {
     while (i < tanda.length && Date.now() - empezo < limiteMs) {
       const vieja = tanda[i++];
@@ -116,14 +121,19 @@ export async function mudarImagenesAR2(limite = 300, limiteMs = 200_000): Promis
       if (!ruta) continue;
       try {
         const res = await fetch(vieja, { cache: "no-store" });
-        if (!res.ok) continue;
+        if (!res.ok) {
+          fallidas++;
+          console.error(`[mudanza] no pude bajar ${ruta}: ${res.status}`);
+          continue;
+        }
         const guardada = await guardarImagen(ruta, new Uint8Array(await res.arrayBuffer()));
         if (guardada) {
           nuevas.set(vieja, guardada);
           aBorrar.push(ruta);
-        }
-      } catch {
-        /* se reintenta en la próxima pasada */
+        } else fallidas++;
+      } catch (e) {
+        fallidas++;
+        console.error(`[mudanza] error con ${ruta}: ${(e as Error).message}`);
       }
     }
   };
@@ -143,5 +153,6 @@ export async function mudarImagenesAR2(limite = 300, limiteMs = 200_000): Promis
   for (let k = 0; k < aBorrar.length; k += 100) await db().storage.from(BUCKET).remove(aBorrar.slice(k, k + 100));
 
   const quedan = urls.length - nuevas.size;
+  console.log(`[mudanza] fin: ${nuevas.size} mudadas, ${fallidas} fallidas, quedan ${quedan}, ${Math.round((Date.now() - empezo) / 1000)} s`);
   return quedan > 0 ? `Mudadas ${nuevas.size} imágenes a Cloudflare; quedan ${quedan}, se siguen mudando solas.` : `Listo: mudadas ${nuevas.size} imágenes a Cloudflare.`;
 }
