@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@supabase/supabase-js": "2.119.2",
     "aws4fetch": "^1.0.20",
     "client-zip": "^2.5.0",

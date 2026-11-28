@@ -128,7 +128,7 @@ export default async function DetallePublicacion({
     <div className="grid gap-6 md:grid-cols-[minmax(0,400px)_1fr]">
       <div className="flex flex-col gap-3">
         {esReel ? (
-          <ReproductorReel id={p.id} embed={embed} audioAparte={videoSinAudio(p.media_url)} nombreArchivo={`${referente?.ig_username ?? "reel"}_${p.ig_id}.mp4`} />
+          <ReproductorReel id={p.id} embed={embed} audioAparte={videoSinAudio(p.media_url)} duracion={p.duracion_seg} nombreArchivo={`${referente?.ig_username ?? "reel"}_${p.ig_id}.mp4`} />
         ) : (
           <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-xl bg-white">
             <iframe

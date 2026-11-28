@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import DescargaReel from "./DescargaReel";
 
 const VELOCIDADES = [1, 1.25, 1.5, 1.75, 2];
 
@@ -10,11 +11,13 @@ export default function ReproductorReel({
   embed,
   nombreArchivo,
   audioAparte = false,
+  duracion,
 }: {
   id: string;
   embed: string;
   nombreArchivo: string;
   audioAparte?: boolean;
+  duracion?: number | null;
 }) {
   const [modo, setModo] = useState<"propio" | "instagram">("propio");
   const [velocidad, setVelocidad] = useState(1);
@@ -157,28 +160,7 @@ export default function ReproductorReel({
         </div>
       )}
 
-      {audioAparte && (
-        <p className="text-center text-xs text-tenue">
-          Instagram manda este reel en otro formato (VP9) y con el audio aparte: el .mp4 descargado sale sin sonido y no abre en QuickTime ni en el reproductor de Windows (sí en VLC o arrastrándolo a Chrome).
-        </p>
-      )}
-      <a
-        href={`/api/reel/${id}/video?descargar=1&nombre=${encodeURIComponent(nombreArchivo)}`}
-        className="flex h-10 items-center justify-center gap-2 rounded-lg border border-borde px-3 text-sm hover:bg-panel-2"
-      >
-        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-        </svg>
-        Descargar reel (.mp4)
-      </a>
-      {audioAparte && (
-        <a
-          href={`/api/reel/${id}/audio?descargar=1&nombre=${encodeURIComponent(nombreArchivo.replace(/\.mp4$/, ".m4a"))}`}
-          className="flex h-10 items-center justify-center gap-2 rounded-lg border border-borde px-3 text-sm hover:bg-panel-2"
-        >
-          Descargar audio (.m4a)
-        </a>
-      )}
+      <DescargaReel id={id} nombre={nombreArchivo} convertir={audioAparte} duracion={duracion ?? null} />
     </div>
   );
 }

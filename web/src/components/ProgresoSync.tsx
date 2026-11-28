@@ -18,6 +18,9 @@ export default function ProgresoSync() {
   const [ocultas, setOcultas] = useState<Set<string>>(new Set());
   const vistasListas = useRef<Set<string>>(new Set());
   const primera = useRef(true);
+  // Cuándo vimos terminar cada una: lo terminado se muestra unos segundos y desaparece solo.
+  const finVisto = useRef<Map<string, number>>(new Map());
+  const [, refrescar] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
@@ -27,6 +30,14 @@ export default function ProgresoSync() {
         .then((r) => r.json())
         .catch(() => [])) as EstadoSync[];
       if (cancelado) return;
+      const ahora = Date.now();
+      for (const d of datos) {
+        if ((d.estado === "listo" || d.estado === "error") && !finVisto.current.has(d.id)) {
+          // Si ya había terminado antes de abrir la página, no la mostramos.
+          const viejo = primera.current && d.terminado_at && ahora - new Date(d.terminado_at).getTime() > 20_000;
+          finVisto.current.set(d.id, viejo ? 0 : ahora);
+        }
+      }
       setLista(datos);
       // Cuando algo termina, refrescamos la página para mostrar lo nuevo.
       const recienTerminadas = datos.filter((d) => d.estado === "listo" && !vistasListas.current.has(d.id));
@@ -43,11 +54,18 @@ export default function ProgresoSync() {
     };
   }, [router]);
 
-  const visibles = lista.filter(
-    (s) =>
-      !ocultas.has(s.id) &&
-      (s.estado === "corriendo" || s.estado === "guardando" || (s.terminado_at && Date.now() - new Date(s.terminado_at).getTime() < 10 * 60_000)),
-  );
+  const DURA = { listo: 6000, error: 12000 } as Record<string, number>;
+  const activa = (s: EstadoSync) => s.estado === "corriendo" || s.estado === "guardando";
+  const visibles = lista.filter((s) => !ocultas.has(s.id) && (activa(s) || Date.now() - (finVisto.current.get(s.id) ?? 0) < (DURA[s.estado] ?? 6000)));
+  const hayTerminadas = visibles.some((s) => !activa(s));
+
+  // Mientras haya avisos terminados en pantalla, re-dibujamos para sacarlos cuando vence su tiempo.
+  useEffect(() => {
+    if (!hayTerminadas) return;
+    const t = setTimeout(() => refrescar((n) => n + 1), 1000);
+    return () => clearTimeout(t);
+  });
+
   if (!visibles.length) return null;
 
   return (
