@@ -3,6 +3,7 @@ import { fechaCorta, multiplicador, numero } from "@/lib/formato";
 import type { Formato, Publicacion, Referente } from "@/lib/tipos";
 import { BotonIdea, BotonTranscribir, Pestanas } from "./Interactivos";
 import SelectorFormato from "./SelectorFormato";
+import ReproductorReel from "./ReproductorReel";
 
 const ETIQUETA = { reel: "Reel", carrusel: "Carrusel", imagen: "Imagen" } as const;
 
@@ -125,16 +126,20 @@ export default async function DetallePublicacion({
   return (
     <div className="grid gap-6 md:grid-cols-[minmax(0,400px)_1fr]">
       <div className="flex flex-col gap-3">
-        <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-xl bg-white">
-          <iframe
-            src={embed}
-            title={`Publicación de @${referente?.ig_username ?? "Instagram"}`}
-            className={`block w-full border-0 ${esReel ? "h-[700px]" : "h-[620px]"}`}
-            allow="autoplay; encrypted-media; fullscreen; clipboard-write"
-            allowFullScreen
-            loading="lazy"
-          />
-        </div>
+        {esReel ? (
+          <ReproductorReel id={p.id} embed={embed} nombreArchivo={`${referente?.ig_username ?? "reel"}_${p.ig_id}.mp4`} />
+        ) : (
+          <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-xl bg-white">
+            <iframe
+              src={embed}
+              title={`Publicación de @${referente?.ig_username ?? "Instagram"}`}
+              className="block h-[620px] w-full border-0"
+              allow="autoplay; encrypted-media; fullscreen; clipboard-write"
+              allowFullScreen
+              loading="lazy"
+            />
+          </div>
+        )}
         <div className={`grid gap-2 ${esReel ? "grid-cols-2" : "grid-cols-1"}`}>
           <a href={linkIg} target="_blank" rel="noreferrer" className="flex h-10 items-center justify-center gap-2 rounded-lg border border-borde px-3 text-sm hover:bg-panel-2">
             Abrir en Instagram ↗
