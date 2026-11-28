@@ -34,3 +34,10 @@ body {
   outline: 2px solid var(--color-acento);
   outline-offset: 2px;
 }
+
+/* Pantalla completa del navegador: mostrar el video entero (las historias son verticales) */
+video:fullscreen,
+video:-webkit-full-screen {
+  object-fit: contain;
+  background: #000;
+}

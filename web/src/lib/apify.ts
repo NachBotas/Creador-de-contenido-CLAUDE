@@ -32,17 +32,79 @@ async function apify(path: string, init?: RequestInit) {
 }
 
 // Arranca una corrida en Apify. Cuando termina, Apify avisa a /api/apify/webhook y ahí guardamos los datos.
-async function arrancar(actor: string, input: unknown, tipo: TipoCorrida) {
+async function arrancar(actor: string, input: unknown, tipo: TipoCorrida, etiqueta: string, esperado: number | null = null) {
   const base = urlPublica();
   if (!base) throw new Error("La sincronización necesita la web publicada (falta APP_URL)");
+  const destino = `${base}/api/apify/webhook?tipo=${tipo}&token=${encodeURIComponent(process.env.CRON_SECRET ?? "")}`;
   const webhook = [
-    {
-      eventTypes: ["ACTOR.RUN.SUCCEEDED"],
-      requestUrl: `${base}/api/apify/webhook?tipo=${tipo}&token=${encodeURIComponent(process.env.CRON_SECRET ?? "")}`,
-    },
+    { eventTypes: ["ACTOR.RUN.SUCCEEDED"], requestUrl: destino },
+    { eventTypes: ["ACTOR.RUN.FAILED", "ACTOR.RUN.TIMED_OUT", "ACTOR.RUN.ABORTED"], requestUrl: `${destino}&fallo=1` },
   ];
   const webhooks = Buffer.from(JSON.stringify(webhook)).toString("base64");
-  await apify(`/acts/${actor}/runs?webhooks=${encodeURIComponent(webhooks)}`, { method: "POST", body: JSON.stringify(input) });
+  const r = (await apify(`/acts/${actor}/runs?webhooks=${encodeURIComponent(webhooks)}`, { method: "POST", body: JSON.stringify(input) })) as {
+    data?: { id: string; defaultDatasetId?: string };
+  };
+  if (r.data?.id) {
+    await db()
+      .from("sincronizaciones")
+      .insert({ run_id: r.data.id, dataset_id: r.data.defaultDatasetId ?? null, tipo, etiqueta, esperado })
+      .then(() => undefined, () => undefined);
+  }
+}
+
+// Estado de las sincronizaciones recientes, para la barra de progreso.
+export type EstadoSync = {
+  id: string;
+  tipo: string;
+  etiqueta: string;
+  estado: string;
+  traidos: number | null;
+  esperado: number | null;
+  guardados: number | null;
+  mensaje: string | null;
+  created_at: string;
+  terminado_at: string | null;
+};
+
+export async function estadoSincronizaciones(): Promise<EstadoSync[]> {
+  const { data } = await db()
+    .from("sincronizaciones")
+    .select("*")
+    .neq("tipo", "detalles")
+    .gte("created_at", new Date(Date.now() - 30 * 60_000).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const filas = (data ?? []) as (EstadoSync & { run_id: string; dataset_id: string | null })[];
+  return Promise.all(
+    filas.map(async (f) => {
+      let traidos: number | null = f.guardados;
+      if (f.estado === "corriendo" && f.dataset_id) {
+        const d = (await apify(`/datasets/${f.dataset_id}`).catch(() => null)) as { data?: { itemCount?: number } } | null;
+        traidos = d?.data?.itemCount ?? 0;
+        // Si Apify ya terminó pero el aviso no llegó, lo marcamos (después de 3 minutos).
+        if (Date.now() - new Date(f.created_at).getTime() > 3 * 60_000) {
+          const run = (await apify(`/actor-runs/${f.run_id}`).catch(() => null)) as { data?: { status?: string } } | null;
+          const st = run?.data?.status;
+          if (st && ["FAILED", "TIMED-OUT", "ABORTED"].includes(st)) {
+            await db().from("sincronizaciones").update({ estado: "error", mensaje: `Apify: ${st}`, terminado_at: new Date().toISOString() }).eq("id", f.id);
+            f.estado = "error";
+          }
+        }
+      }
+      return {
+        id: f.id,
+        tipo: f.tipo,
+        etiqueta: f.etiqueta,
+        estado: f.estado,
+        traidos,
+        esperado: f.esperado,
+        guardados: f.guardados,
+        mensaje: f.mensaje,
+        created_at: f.created_at,
+        terminado_at: f.terminado_at,
+      };
+    }),
+  );
 }
 
 export type OpcionesSync = {
@@ -80,11 +142,13 @@ export async function iniciarSincronizacion(o: OpcionesSync): Promise<string> {
   const conFeed = o.feed ? refs.filter((r) => una || r.contenido_activo) : [];
   const conHistorias = o.historias ? refs.filter((r) => una || r.historias_activo) : [];
   const url = (u: string) => `https://www.instagram.com/${u}/`;
-  const maximo = Math.min(Math.max(Math.round(o.maximo) || 8, 1), 200);
+  const maximo = Math.min(Math.max(Math.round(o.maximo) || 8, 1), 500);
+  const periodo = o.dias > 0 ? `últimos ${o.dias} días` : "sin límite de fecha";
+  const nombres = (l: { ig_username: string }[]) => (l.length <= 3 ? l.map((r) => `@${r.ig_username}`).join(", ") : `${l.length} cuentas`);
 
   const tareas: Promise<unknown>[] = [];
   if (conFeed.length) {
-    tareas.push(arrancar(ACTOR_POSTS, { directUrls: conFeed.map((r) => url(r.ig_username)), resultsType: "details", resultsLimit: 1 }, "detalles"));
+    tareas.push(arrancar(ACTOR_POSTS, { directUrls: conFeed.map((r) => url(r.ig_username)), resultsType: "details", resultsLimit: 1 }, "detalles", "Perfiles"));
     tareas.push(
       arrancar(
         ACTOR_POSTS,
@@ -96,11 +160,20 @@ export async function iniciarSincronizacion(o: OpcionesSync): Promise<string> {
           ...(o.dias > 0 ? { onlyPostsNewerThan: `${Math.round(o.dias)} days` } : {}),
         },
         "posts",
+        `Feed de ${nombres(conFeed)} · ${periodo}, hasta ${maximo} c/u`,
+        conFeed.length * maximo,
       ),
     );
   }
   if (conHistorias.length) {
-    tareas.push(arrancar(ACTOR_HISTORIAS, { usernames: conHistorias.map((r) => r.ig_username), includeStories: true, includeHighlights: false }, "historias"));
+    tareas.push(
+      arrancar(
+        ACTOR_HISTORIAS,
+        { usernames: conHistorias.map((r) => r.ig_username), includeStories: true, includeHighlights: false },
+        "historias",
+        `Historias de ${nombres(conHistorias)}`,
+      ),
+    );
   }
   if (!tareas.length) return "Ninguna cuenta tiene activado lo que elegiste.";
   await Promise.all(tareas);
@@ -132,7 +205,13 @@ export async function pendientesDePortada(): Promise<{ id: string; url: string }
 export async function completarPortadas(maximo = 40): Promise<string> {
   const pendientes = (await pendientesDePortada()).slice(0, maximo);
   if (!pendientes.length) return "No hay ganadores sin portada.";
-  await arrancar(ACTOR_POSTS, { directUrls: pendientes.map((p) => p.url), resultsType: "posts", resultsLimit: 1, addParentData: false }, "posts");
+  await arrancar(
+    ACTOR_POSTS,
+    { directUrls: pendientes.map((p) => p.url), resultsType: "posts", resultsLimit: 1, addParentData: false },
+    "posts",
+    `Portadas de ${pendientes.length} ganadores`,
+    pendientes.length,
+  );
   return `Completando portada y texto de ${pendientes.length} ganadores (~US$ ${(pendientes.length * 0.0027).toFixed(2)}). Tarda unos minutos.`;
 }
 

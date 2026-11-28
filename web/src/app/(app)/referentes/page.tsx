@@ -1,6 +1,7 @@
 import { agregarFormato, agregarReferente, completarPortadasAccion, guardarAjusteSync, sincronizar } from "@/app/acciones";
 import { leerSyncDiaria, pendientesDePortada } from "@/lib/apify";
 import FormSync from "@/components/FormSync";
+import ProgresoSync from "@/components/ProgresoSync";
 import { conteosPorReferente, listarFormatos, listarReferentes } from "@/lib/datos";
 import { fechaHora, numero } from "@/lib/formato";
 import Encabezado, { Aviso, Vacio } from "@/components/Encabezado";
@@ -26,6 +27,7 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
       </Encabezado>
 
       <Aviso msg={msg} error={error} />
+      <ProgresoSync />
 
       <form action={agregarReferente} className="flex flex-wrap gap-2 rounded-xl border border-borde bg-panel p-3">
         <label htmlFor="usuario" className="sr-only">

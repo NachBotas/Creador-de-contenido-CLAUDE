@@ -29,6 +29,7 @@ export default async function Secuencia({ params }: { params: Promise<{ referent
         <p className="text-sm text-suave">No hay historias guardadas ese día.</p>
       ) : (
         <SecuenciaCliente
+          usuario={r.ig_username}
           items={historias.map((h, i) => {
             const esVideo = h.tipo_media === "video";
             const video = esVideo && h.media_url && h.media_url !== h.miniatura_url ? h.media_url : null;

@@ -15,7 +15,9 @@ const PERIODOS = [
   [90, "Últimos 3 meses"],
   [0, "Sin límite de fecha"],
 ] as const;
-const MAXIMOS = [5, 8, 10, 20, 30, 50, 100];
+const MAXIMOS = [5, 8, 10, 20, 30, 50, 100, 200, 500];
+// Máximo sugerido según el período (aprox. lo que publica una cuenta activa)
+const SUGERIDO: Record<number, number> = { 7: 10, 14: 20, 21: 30, 30: 50, 90: 100, 0: 200 };
 
 type Ref = { id: string; usuario: string; contenido: boolean; historias: boolean };
 
@@ -90,7 +92,16 @@ export default function FormSync({
           <div className="ml-6 flex flex-wrap gap-2">
             <label className="flex flex-col gap-1 text-xs text-suave">
               Hasta cuándo hacia atrás
-              <select name="dias" value={dias} onChange={(e) => setDias(Number(e.target.value))} className={sel}>
+              <select
+                name="dias"
+                value={dias}
+                onChange={(e) => {
+                  const d = Number(e.target.value);
+                  setDias(d);
+                  if (SUGERIDO[d]) setMaximo(SUGERIDO[d]);
+                }}
+                className={sel}
+              >
                 {PERIODOS.map(([v, t]) => (
                   <option key={v} value={v}>
                     {t}
@@ -103,7 +114,7 @@ export default function FormSync({
               <select name="maximo" value={maximo} onChange={(e) => setMaximo(Number(e.target.value))} className={sel}>
                 {MAXIMOS.map((m) => (
                   <option key={m} value={m}>
-                    {m} publicaciones
+                    {m === 500 ? "Todo el período (hasta 500)" : `${m} publicaciones`}
                   </option>
                 ))}
               </select>

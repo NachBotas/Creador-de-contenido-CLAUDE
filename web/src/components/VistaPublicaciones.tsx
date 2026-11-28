@@ -4,6 +4,7 @@ import type { Publicacion } from "@/lib/tipos";
 import AutoEnviar from "./AutoEnviar";
 import Encabezado, { Aviso, Vacio } from "./Encabezado";
 import FormSync from "./FormSync";
+import ProgresoSync from "./ProgresoSync";
 import { sincronizar } from "@/app/acciones";
 import Tarjeta from "./Tarjeta";
 import PanelReferentes from "./PanelReferentes";
@@ -152,6 +153,7 @@ export default async function VistaPublicaciones({
       </Encabezado>
 
       <Aviso msg={typeof sp.msg === "string" ? sp.msg : undefined} error={typeof sp.error === "string" ? sp.error : undefined} />
+      {tipo === "todos" && <ProgresoSync />}
 
       {tipo === "todos" && referentes.length > 0 && (
         <details className="group rounded-xl border border-borde bg-panel">
