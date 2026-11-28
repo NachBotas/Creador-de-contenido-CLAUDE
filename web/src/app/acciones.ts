@@ -361,3 +361,24 @@ export async function mudarImagenesAccion() {
   });
   volver("/referentes", "Mudanza a Cloudflare en marcha. Tarda unos minutos; podés seguir usando la app (refrescá para ver el avance).");
 }
+
+// ---------- Descargar y borrar historias de la nube ----------
+
+export async function prepararDescargaHistorias(): Promise<boolean> {
+  await exigirSesion();
+  const { asegurarCorsR2 } = await import("@/lib/almacen");
+  return asegurarCorsR2().catch(() => false);
+}
+
+export async function borrarHistoriasDeLaNube(ids: string[]): Promise<string> {
+  await exigirSesion();
+  const validos = ids.filter((id) => /^[0-9a-f-]{36}$/.test(id)).slice(0, 2000);
+  if (!validos.length) return "No elegiste ninguna historia.";
+  const { borrarDeR2 } = await import("@/lib/almacen");
+  const { data } = await db().from("historias").select("id, media_url, miniatura_url").in("id", validos);
+  const filas = (data ?? []) as { id: string; media_url: string | null; miniatura_url: string | null }[];
+  await borrarDeR2(filas.flatMap((f) => [f.media_url, f.miniatura_url]));
+  await db().from("historias").update({ archivos_borrados: true, media_url: null, miniatura_url: null }).in("id", filas.map((f) => f.id));
+  revalidatePath("/", "layout");
+  return `Borradas de la nube ${filas.length} ${filas.length === 1 ? "historia" : "historias"}.`;
+}

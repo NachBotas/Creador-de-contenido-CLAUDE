@@ -172,3 +172,42 @@ export async function mudarImagenesAR2(limite = 300, limiteMs = 200_000): Promis
   console.log(`[mudanza] fin: ${nuevas.size} mudadas, ${fallidas} fallidas, quedan ${quedan}, ${Math.round((Date.now() - empezo) / 1000)} s`);
   return quedan > 0 ? `Mudadas ${nuevas.size} imágenes a Cloudflare; quedan ${quedan}, se siguen mudando solas.` : `Listo: mudadas ${nuevas.size} imágenes a Cloudflare.`;
 }
+
+// ---------- Borrar archivos de R2 ----------
+
+export async function borrarDeR2(urls: (string | null | undefined)[]): Promise<number> {
+  if (!r2Configurado()) return 0;
+  const base = baseR2();
+  const claves = [...new Set(urls.filter((u): u is string => Boolean(u && u.startsWith(base))).map((u) => u.slice(base.length + 1).split("?")[0]))];
+  let borrados = 0;
+  for (let i = 0; i < claves.length; i += 8) {
+    const res = await Promise.all(
+      claves.slice(i, i + 8).map((k) => r2().fetch(`${process.env.R2_ENDPOINT!.replace(/\/$/, "")}/${R2_BUCKET}/${k}`, { method: "DELETE" })),
+    );
+    borrados += res.filter((r) => r.ok || r.status === 404).length;
+  }
+  return borrados;
+}
+
+// Permite que el navegador baje los archivos directo de R2 (para armar el .zip). Se intenta una sola vez.
+export async function asegurarCorsR2(): Promise<boolean> {
+  if (!r2Configurado()) return false;
+  const { data } = await db().from("ajustes").select("valor").eq("clave", "r2_cors").maybeSingle();
+  if ((data?.valor as { ok?: boolean } | null)?.ok !== undefined) return Boolean((data!.valor as { ok: boolean }).ok);
+  const xml =
+    '<?xml version="1.0" encoding="UTF-8"?><CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin>' +
+    "<AllowedMethod>GET</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader>" +
+    "<MaxAgeSeconds>86400</MaxAgeSeconds></CORSRule></CORSConfiguration>";
+  const { createHash } = await import("node:crypto");
+  const res = await r2()
+    .fetch(`${process.env.R2_ENDPOINT!.replace(/\/$/, "")}/${R2_BUCKET}?cors`, {
+      method: "PUT",
+      body: xml,
+      headers: { "Content-Type": "application/xml", "Content-MD5": createHash("md5").update(xml).digest("base64") },
+    })
+    .catch(() => null);
+  const ok = Boolean(res?.ok);
+  if (!ok && res) console.error(`[r2] CORS: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  await db().from("ajustes").upsert({ clave: "r2_cors", valor: { ok }, updated_at: new Date().toISOString() });
+  return ok;
+}

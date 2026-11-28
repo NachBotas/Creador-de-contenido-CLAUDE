@@ -11,6 +11,7 @@
   "dependencies": {
     "@supabase/supabase-js": "2.119.2",
     "aws4fetch": "^1.0.20",
+    "client-zip": "^2.5.0",
     "exceljs": "^4.4.0",
     "next": "15.5.29",
     "react": "19.1.10",

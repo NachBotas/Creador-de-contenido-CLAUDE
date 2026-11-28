@@ -57,4 +57,5 @@ export type Historia = {
   categoria: string | null;
   drive_archivo_id: string | null;
   drive_estado: string | null;
+  archivos_borrados: boolean;
 };

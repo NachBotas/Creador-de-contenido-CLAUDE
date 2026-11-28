@@ -1,10 +1,18 @@
-import Link from "next/link";
 import type { Secuencia } from "@/lib/datos";
-import type { Referente } from "@/lib/tipos";
+import type { Historia, Referente } from "@/lib/tipos";
 import { diaLargo } from "@/lib/formato";
 import { Vacio } from "./Encabezado";
+import GrillaHistoriasCliente, { type TarjetaSecuencia } from "./GrillaHistoriasCliente";
 
-// Historias agrupadas en secuencias por cuenta y por día.
+export function nombreArchivo(h: Historia, usuario: string): string {
+  const f = new Date(h.fecha_publicacion);
+  const dia = f.toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
+  const hora = f.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Argentina/Buenos_Aires" }).replace(":", "");
+  const esVideo = h.tipo_media === "video" && h.media_url && h.media_url !== h.miniatura_url;
+  return `@${usuario}/${dia}/${hora}_${h.ig_id}.${esVideo ? "mp4" : "jpg"}`;
+}
+
+// Historias agrupadas en secuencias por cuenta y por día, con selección para descargar o borrar.
 export default function GrillaHistorias({ secuencias, refPorId }: { secuencias: Secuencia[]; refPorId: Map<string, Referente> }) {
   if (!secuencias.length) {
     return (
@@ -14,50 +22,26 @@ export default function GrillaHistorias({ secuencias, refPorId }: { secuencias: 
       />
     );
   }
-  const porDia = new Map<string, Secuencia[]>();
-  for (const s of secuencias) porDia.set(s.dia, [...(porDia.get(s.dia) ?? []), s]);
-  return (
-    <>
-      {[...porDia.entries()].map(([dia, lista]) => (
-        <section key={dia} className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium first-letter:uppercase">
-            {diaLargo(dia)} <span className="text-xs font-normal text-tenue">· {lista.length} {lista.length === 1 ? "cuenta" : "cuentas"}</span>
-          </h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
-            {lista.map((s) => {
-              const r = refPorId.get(s.referenteId);
-              const portada = s.historias[0];
-              return (
-                <Link
-                  key={`${s.referenteId}${s.dia}`}
-                  href={`/historias/${s.referenteId}/${s.dia}`}
-                  className="group overflow-hidden rounded-xl border border-borde bg-panel transition hover:border-suave/40"
-                >
-                  <div className="relative aspect-[9/16] bg-black">
-                    {portada?.miniatura_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={portada.miniatura_url} alt="" loading="lazy" className="size-full object-cover transition group-hover:opacity-90" />
-                    )}
-                    <span className="absolute left-2 top-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-white">
-                      {s.historias.length}
-                    </span>
-                    {s.activa && (
-                      <span className="absolute right-2 top-2 rounded-md bg-acento px-1.5 py-0.5 text-[10px] font-semibold text-black">Activa</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 p-2 text-xs">
-                    {r?.foto_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={r.foto_url} alt="" className="size-4 rounded-full object-cover" />
-                    )}
-                    <span className="truncate">@{r?.ig_username}</span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      ))}
-    </>
-  );
+  const tarjetas: TarjetaSecuencia[] = secuencias.map((s) => {
+    const r = refPorId.get(s.referenteId);
+    const usuario = r?.ig_username ?? "cuenta";
+    const portada = s.historias.find((h) => h.miniatura_url)?.miniatura_url ?? null;
+    return {
+      clave: `${s.referenteId}|${s.dia}`,
+      href: `/historias/${s.referenteId}/${s.dia}`,
+      dia: s.dia,
+      diaTexto: diaLargo(s.dia),
+      usuario,
+      foto: r?.foto_url ?? null,
+      portada,
+      activa: s.activa,
+      archivos: s.historias.map((h) => ({
+        id: h.id,
+        url: h.media_url ?? h.miniatura_url,
+        nombre: nombreArchivo(h, usuario),
+        borrada: h.archivos_borrados,
+      })),
+    };
+  });
+  return <GrillaHistoriasCliente tarjetas={tarjetas} />;
 }
