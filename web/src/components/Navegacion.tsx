@@ -23,7 +23,7 @@ export default function Navegacion() {
   return (
     <>
       {/* Escritorio */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-borde bg-fondo md:flex">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-borde bg-fondo md:sticky md:top-0 md:flex md:h-svh md:overflow-y-auto">
         <div className="flex h-16 items-center gap-2.5 px-5">
           <svg viewBox="0 0 32 32" className="size-8" aria-hidden="true">
             <rect width="32" height="32" rx="8" fill="#1a1d24" />

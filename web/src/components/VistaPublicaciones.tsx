@@ -359,13 +359,22 @@ export default async function VistaPublicaciones({
                   Mostrando {pubs.length} de {total}
                 </p>
                 {hayMas && (
-                  <Link
-                    href={enlace(sp, { limite: String(pubs.length + 40), ver: "" })}
-                    scroll={false}
-                    className="h-10 rounded-lg border border-borde px-5 text-sm leading-10 hover:bg-panel"
-                  >
-                    Ver más (40 más)
-                  </Link>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Link
+                      href={enlace(sp, { limite: String(pubs.length + 40), ver: "" })}
+                      scroll={false}
+                      className="h-10 rounded-lg border border-borde px-5 text-sm leading-10 hover:bg-panel"
+                    >
+                      Ver más (40 más)
+                    </Link>
+                    <Link
+                      href={enlace(sp, { limite: String(Math.min(total, 1000)), ver: "" })}
+                      scroll={false}
+                      className="h-10 rounded-lg px-4 text-sm leading-10 text-suave hover:text-texto"
+                    >
+                      Mostrar todas ({total})
+                    </Link>
+                  </div>
                 )}
               </div>
             );
