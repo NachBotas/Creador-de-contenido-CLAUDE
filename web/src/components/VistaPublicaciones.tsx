@@ -79,7 +79,7 @@ export default async function VistaPublicaciones({
   const [formatos, referentes, pubs, { porFormato: conteo, porTipo, ranking }, guardadas, abierta] = await Promise.all([
     listarFormatos(),
     listarReferentes(),
-    listarPublicaciones(f, f.vista === "tablero" ? 400 : 120),
+    listarPublicaciones(f, f.vista === "tablero" ? 400 : Math.min(Math.max(Number(sp.limite) || 40, 40), 1000)),
     contar(f),
     idsGuardados(),
     ver ? obtenerPublicacion(ver) : Promise.resolve(null),
@@ -344,11 +344,33 @@ export default async function VistaPublicaciones({
       ) : f.vista === "tablero" && porFormato ? (
         <Tablero pubs={pubs} tabs={tabs.slice(1)} refPorId={refPorId} formatos={formatos} hrefVer={hrefVer} guardadas={guardadas} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-          {pubs.map((p) => (
-            <Tarjeta key={p.id} p={p} href={hrefVer(p.id)} guardada={guardadas.has(p.id)} referente={refPorId.get(p.referente_id)} formatos={formatos} mostrarFormato={porFormato} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            {pubs.map((p) => (
+              <Tarjeta key={p.id} p={p} href={hrefVer(p.id)} guardada={guardadas.has(p.id)} referente={refPorId.get(p.referente_id)} formatos={formatos} mostrarFormato={porFormato} />
+            ))}
+          </div>
+          {(() => {
+            const total = porFormato ? (conteo.get(f.formato) ?? pubs.length) : (porTipo.get(f.tipo === "todos" ? "todos" : f.tipo) ?? pubs.length);
+            const hayMas = pubs.length < total;
+            return (
+              <div className="flex flex-col items-center gap-2 pb-6 pt-2">
+                <p className="text-xs text-tenue">
+                  Mostrando {pubs.length} de {total}
+                </p>
+                {hayMas && (
+                  <Link
+                    href={enlace(sp, { limite: String(pubs.length + 40), ver: "" })}
+                    scroll={false}
+                    className="h-10 rounded-lg border border-borde px-5 text-sm leading-10 hover:bg-panel"
+                  >
+                    Ver más (40 más)
+                  </Link>
+                )}
+              </div>
+            );
+          })()}
+        </>
       )}
         </>
       )}
