@@ -159,7 +159,7 @@ export default function ReproductorReel({
 
       {audioAparte && (
         <p className="text-center text-xs text-tenue">
-          Instagram manda este reel con el audio aparte: el video descargado sale sin sonido, por eso te dejamos bajar el audio también.
+          Instagram manda este reel en otro formato (VP9) y con el audio aparte: el .mp4 descargado sale sin sonido y no abre en QuickTime ni en el reproductor de Windows (sí en VLC o arrastrándolo a Chrome).
         </p>
       )}
       <a
