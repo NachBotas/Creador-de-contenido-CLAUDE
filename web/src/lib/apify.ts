@@ -1,5 +1,6 @@
 import "server-only";
-import { db, BUCKET } from "./supabase";
+import { db } from "./supabase";
+import { copiarImagen, esPropia } from "./almacen";
 import { detectarCta, detectarPalabraClave } from "./cta";
 
 // Scrapers de Apify que usamos (probados).
@@ -144,23 +145,6 @@ export async function itemsDelDataset(datasetId: string): Promise<Record<string,
   return res.json();
 }
 
-// ---------- Guardado de imágenes en Supabase Storage (las URLs de Instagram vencen) ----------
-
-export async function copiarImagen(url: string | undefined | null, ruta: string): Promise<string | null> {
-  if (!url) return null;
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return null;
-    const tipo = res.headers.get("content-type") ?? "image/jpeg";
-    const cuerpo = new Uint8Array(await res.arrayBuffer());
-    const { error } = await db().storage.from(BUCKET).upload(ruta, cuerpo, { contentType: tipo, upsert: true });
-    if (error) return null;
-    return db().storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl;
-  } catch {
-    return null;
-  }
-}
-
 async function enLotes<T>(items: T[], tamano: number, fn: (item: T) => Promise<void>) {
   for (let i = 0; i < items.length; i += tamano) await Promise.all(items.slice(i, i + tamano).map(fn));
 }
@@ -212,7 +196,7 @@ export async function procesarPosts(items: Record<string, unknown>[]) {
     const caption = (it.caption as string) ?? null;
     const hijos = Array.isArray(it.childPosts) ? (it.childPosts as Record<string, unknown>[]) : [];
     const imagenes = hijos.length ? hijos.map((c) => c.displayUrl as string) : ((it.images as string[]) ?? []);
-    const miniatura = yaGuardadas.get(codigo)?.includes("supabase") ? yaGuardadas.get(codigo) : await copiarImagen(it.displayUrl as string, `publicaciones/${codigo}.jpg`);
+    const miniatura = esPropia(yaGuardadas.get(codigo)) ? yaGuardadas.get(codigo) : await copiarImagen(it.displayUrl as string, `publicaciones/${codigo}.jpg`);
     filas.push({
       referente_id: refs.get(String(it.ownerUsername).toLowerCase()),
       ig_id: codigo,
@@ -273,7 +257,7 @@ export async function procesarHistorias(items: Record<string, unknown>[]) {
     .select("ig_id, miniatura_url")
     .in("ig_id", filas.map((f) => String((f.s as Record<string, unknown>).id)));
   const ya = new Set(
-    ((existentes ?? []) as { ig_id: string; miniatura_url: string | null }[]).filter((e) => e.miniatura_url?.includes("supabase")).map((e) => e.ig_id),
+    ((existentes ?? []) as { ig_id: string; miniatura_url: string | null }[]).filter((e) => esPropia(e.miniatura_url)).map((e) => e.ig_id),
   );
   const nuevas = filas.filter((f) => !ya.has(String((f.s as Record<string, unknown>).id)));
 

@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "./supabase";
 import { cifrar, descifrar } from "./cifrado";
-import { copiarImagen, urlPublica } from "./apify";
+import { urlPublica } from "./apify";
+import { copiarImagen } from "./almacen";
 
 // API oficial de Instagram con "Instagram Login" (cuentas profesionales: Empresa o Creador).
 // No se guardan contraseñas: cada cuenta autoriza desde la página de Instagram.

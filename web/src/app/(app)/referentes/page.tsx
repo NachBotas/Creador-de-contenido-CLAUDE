@@ -1,3 +1,5 @@
+import { mudarImagenesAccion } from "@/app/acciones";
+import { r2Configurado } from "@/lib/almacen";
 import { agregarFormato, agregarReferente, completarPortadasAccion, guardarAjusteSync, sincronizar } from "@/app/acciones";
 import { leerSyncDiaria, pendientesDePortada } from "@/lib/apify";
 import FormSync from "@/components/FormSync";
@@ -75,6 +77,15 @@ export default async function Referentes({ searchParams }: { searchParams: Promi
             );
           })}
         </ul>
+      )}
+
+      {r2Configurado() && (
+        <form action={mudarImagenesAccion} className="flex flex-wrap items-center gap-3 rounded-xl border border-borde bg-panel p-4">
+          <p className="min-w-0 flex-1 text-sm">
+            <strong>Imágenes en Cloudflare.</strong> <span className="text-suave">Las nuevas ya se guardan ahí. Las viejas de Supabase se mudan solas cada mañana; si querés, mudalas ahora.</span>
+          </p>
+          <button className="h-9 rounded-lg border border-borde px-3 text-sm hover:bg-panel-2">Mudar ahora</button>
+        </form>
       )}
 
       {sinPortada.length > 0 && (

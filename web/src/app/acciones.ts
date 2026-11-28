@@ -348,3 +348,18 @@ export async function subirDriveAhora() {
   revalidatePath("/", "layout");
   volver("/referentes", msg);
 }
+
+// ---------- Cloudflare R2 ----------
+
+export async function mudarImagenesAccion() {
+  await exigirSesion();
+  const { mudarImagenesAR2 } = await import("@/lib/almacen");
+  let msg = "";
+  try {
+    msg = await mudarImagenesAR2(400, 50_000);
+  } catch (e) {
+    volver("/referentes", (e as Error).message, true);
+  }
+  revalidatePath("/", "layout");
+  volver("/referentes", msg);
+}
