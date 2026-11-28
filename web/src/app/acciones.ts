@@ -353,13 +353,11 @@ export async function subirDriveAhora() {
 
 export async function mudarImagenesAccion() {
   await exigirSesion();
+  const { after } = await import("next/server");
   const { mudarImagenesAR2 } = await import("@/lib/almacen");
-  let msg = "";
-  try {
-    msg = await mudarImagenesAR2(400, 50_000);
-  } catch (e) {
-    volver("/referentes", (e as Error).message, true);
-  }
-  revalidatePath("/", "layout");
-  volver("/referentes", msg);
+  // Sigue trabajando en segundo plano después de responder.
+  after(async () => {
+    await mudarImagenesAR2(2000, 280_000).catch(() => undefined);
+  });
+  volver("/referentes", "Mudanza a Cloudflare en marcha. Tarda unos minutos; podés seguir usando la app (refrescá para ver el avance).");
 }

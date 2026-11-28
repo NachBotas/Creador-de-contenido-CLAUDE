@@ -91,45 +91,57 @@ function rutaDesdeUrl(url: string): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-// Mueve hasta `limite` imágenes de Supabase a R2, actualiza los links y borra las copias viejas.
+// Mueve hasta `limite` imágenes de Supabase a R2 (de a 8 en paralelo), actualiza los links y borra las copias viejas.
 export async function mudarImagenesAR2(limite = 300, limiteMs = 200_000): Promise<string> {
   if (!r2Configurado()) return "Cloudflare R2 no está configurado.";
   const empezo = Date.now();
-  const nuevas = new Map<string, string>(); // url vieja -> url nueva
-  const aBorrar: string[] = [];
-  let movidas = 0;
-  let quedan = 0;
 
+  // 1) Juntar todas las filas que todavía apuntan a Supabase
+  const filas: { tabla: string; columna: string; id: string; valor: string }[] = [];
   for (const { tabla, columna } of COLUMNAS) {
-    const { data } = await db().from(tabla).select(`id, ${columna}`).like(columna, "%supabase.co/storage%").limit(limite);
-    const filas = (data ?? []) as unknown as Record<string, string>[];
-    for (const fila of filas) {
-      if (movidas >= limite || Date.now() - empezo > limiteMs) {
-        quedan++;
-        continue;
-      }
-      const vieja = fila[columna].split("?")[0];
-      let nueva = nuevas.get(vieja);
-      if (!nueva) {
-        const ruta = rutaDesdeUrl(vieja);
-        if (!ruta) continue;
-        try {
-          const res = await fetch(vieja, { cache: "no-store" });
-          if (!res.ok) continue;
-          const guardada = await guardarImagen(ruta, new Uint8Array(await res.arrayBuffer()));
-          if (!guardada) continue;
-          nueva = guardada;
-          nuevas.set(vieja, nueva);
-          aBorrar.push(ruta);
-          movidas++;
-        } catch {
-          continue;
-        }
-      }
-      const sufijo = fila[columna].includes("?") ? `?${fila[columna].split("?")[1]}` : "";
-      await db().from(tabla).update({ [columna]: `${nueva}${sufijo}` }).eq("id", fila.id);
-    }
+    const { data } = await db().from(tabla).select(`id, ${columna}`).like(columna, "%supabase.co/storage%").limit(2000);
+    for (const f of (data ?? []) as unknown as Record<string, string>[]) filas.push({ tabla, columna, id: f.id, valor: f[columna] });
   }
-  for (let i = 0; i < aBorrar.length; i += 100) await db().storage.from(BUCKET).remove(aBorrar.slice(i, i + 100));
-  return quedan ? `Mudadas ${movidas} imágenes a Cloudflare; quedan más, se siguen mudando solas.` : `Mudadas ${movidas} imágenes a Cloudflare.`;
+  const urls = [...new Set(filas.map((f) => f.valor.split("?")[0]))];
+  const tanda = urls.slice(0, limite);
+
+  // 2) Copiar cada imagen a R2 (achicada)
+  const nuevas = new Map<string, string>();
+  const aBorrar: string[] = [];
+  let i = 0;
+  const trabajador = async () => {
+    while (i < tanda.length && Date.now() - empezo < limiteMs) {
+      const vieja = tanda[i++];
+      const ruta = rutaDesdeUrl(vieja);
+      if (!ruta) continue;
+      try {
+        const res = await fetch(vieja, { cache: "no-store" });
+        if (!res.ok) continue;
+        const guardada = await guardarImagen(ruta, new Uint8Array(await res.arrayBuffer()));
+        if (guardada) {
+          nuevas.set(vieja, guardada);
+          aBorrar.push(ruta);
+        }
+      } catch {
+        /* se reintenta en la próxima pasada */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, trabajador));
+
+  // 3) Actualizar los links en la base
+  const cambios = filas.filter((f) => nuevas.has(f.valor.split("?")[0]));
+  for (let k = 0; k < cambios.length; k += 10) {
+    await Promise.all(
+      cambios.slice(k, k + 10).map((f) => {
+        const sufijo = f.valor.includes("?") ? `?${f.valor.split("?")[1]}` : "";
+        return db().from(f.tabla).update({ [f.columna]: `${nuevas.get(f.valor.split("?")[0])}${sufijo}` }).eq("id", f.id);
+      }),
+    );
+  }
+  // 4) Borrar las copias viejas de Supabase
+  for (let k = 0; k < aBorrar.length; k += 100) await db().storage.from(BUCKET).remove(aBorrar.slice(k, k + 100));
+
+  const quedan = urls.length - nuevas.size;
+  return quedan > 0 ? `Mudadas ${nuevas.size} imágenes a Cloudflare; quedan ${quedan}, se siguen mudando solas.` : `Listo: mudadas ${nuevas.size} imágenes a Cloudflare.`;
 }
